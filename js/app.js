@@ -26,6 +26,15 @@
     whatsapp: '<path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21"/><path d="M9 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1a5 5 0 0 0 5 5h1a.5.5 0 0 0 0-1h-1a.5.5 0 0 0 0 1"/>',
     phone: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/>',
     mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+    flame: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
+    receipt: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>',
+    bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+    refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+    copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+    logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+    external: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
     heart: '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>'
   };
   const icon = (name, cls = "icon") =>
@@ -129,6 +138,7 @@
           <div class="foot-links">${contact}</div>
         </div>
         <div class="foot-links foot-links--muted" style="margin-top:22px">
+          <a href="order.html">My orders</a>
           <a href="policies.html#terms">Terms &amp; Conditions</a>
           <a href="policies.html#privacy">Privacy Policy</a>
           <a href="policies.html#shipping">Delivery Policy</a>
@@ -502,6 +512,8 @@
     if (dl) dl.textContent = !details.loc ? "Pin location" : !q ? "…" : q.outside ? "To be confirmed" : rupee(q.charge);
     const gt = $("[data-grand]", o);
     if (gt) gt.textContent = rupee(grandTotal());
+    const gb = $("[data-grand-btn]", o);
+    if (gb) gb.textContent = rupee(grandTotal());
   }
 
   async function setLocation(o, latlng, opts = {}) {
@@ -661,9 +673,7 @@
         ${f("note", "Anything else? (allergies, occasion…)", "textarea")}
         <p class="error hidden" data-error></p>
       </form>`;
-    const foot = S.whatsapp
-      ? `<button class="btn btn--wa" type="button" data-send>${icon("whatsapp")} Send order on WhatsApp</button>`
-      : `<button class="btn btn--ig" type="button" data-send>${icon("instagram")} Copy order &amp; DM us</button>`;
+    const foot = `<button class="btn" type="button" data-send>Place order · <span data-grand-btn>${rupee(grandTotal())}</span></button>`;
     const o = openSheet("Your box", body, foot);
 
     $(".form", o).addEventListener("input", (e) => {
@@ -714,7 +724,7 @@
     });
   }
 
-  function buildMessage() {
+  function buildMessage(orderId) {
     const m = S.modes[state.mode];
     const lines = state.cart.map((l, i) => {
       const { item, opts, total } = lineText(l);
@@ -722,6 +732,7 @@
     });
     const out = [
       `Hi ${S.name}! I'd like to place an order 🍪`,
+      ...(orderId ? [`Order ID: ${orderId}`] : []),
       "",
       ...lines,
       "",
@@ -748,10 +759,98 @@
     out.push(`${m.needsAddress ? "Delivery" : "Pick-up"} on: ${details.date}${details.time ? " at " + details.time : ""}`);
     if (m.gift && details.message) out.push(`Gift note: "${details.message}"`);
     if (details.note) out.push(`Notes: ${details.note}`);
+    if (orderId) out.push("", `Track order: ${trackUrl(orderId)}`);
     return out.join("\n");
   }
 
-  function sendOrder(o) {
+  /* ---------- Order tracking ---------- */
+  const trackUrl = (id) => new URL(`order.html?id=${encodeURIComponent(id)}`, location.href).href;
+
+  // Saves the order to the database (Vercel). Resolves to the order id, or null when
+  // tracking isn't available (e.g. no database configured, or a static-only host).
+  async function createOrder() {
+    const m = S.modes[state.mode];
+    const q = m.needsAddress ? deliveryQuote() : null;
+    const payload = {
+      items: state.cart.map((l) => {
+        const { item, opts, total } = lineText(l);
+        return { name: item.name, options: opts, qty: l.qty, price: total };
+      }),
+      subtotal: cartTotal(),
+      delivery: q ? { km: +q.km.toFixed(1), charge: q.charge, outside: q.outside } : null,
+      total: grandTotal(),
+      city: state.city,
+      mode: state.mode,
+      customer: { name: details.name, phone: details.phone },
+      recipient: m.gift ? { name: details.recipient, phone: details.recipientPhone } : null,
+      address: m.needsAddress ? details.address : "",
+      landmark: m.needsAddress ? details.landmark : "",
+      loc: m.needsAddress ? details.loc || null : null,
+      date: details.date,
+      time: details.time,
+      giftNote: m.gift ? details.message : "",
+      note: details.note
+    };
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      const res = await fetch("api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: ctrl.signal
+      });
+      clearTimeout(timer);
+      if (!res.ok) return null;
+      const { id } = await res.json();
+      return id || null;
+    } catch (e) { return null; }
+  }
+
+  function rememberOrder(id) {
+    const list = store.get("orders", []).filter((o) => o.id !== id);
+    list.unshift({ id, at: Date.now(), total: grandTotal(), items: cartQty() });
+    store.set("orders", list.slice(0, 20));
+  }
+
+  function showSendSheet(msg, orderId) {
+    const how = S.whatsapp ? "WhatsApp" : "Instagram";
+    const body = `
+      <div class="sent">
+        <div class="sent__icon">${icon(orderId ? "check" : "heart")}</div>
+        <h3>${orderId ? "Almost done!" : "One last step"}</h3>
+        ${orderId ? `<p class="sent__id">Order ID <b>${esc(orderId)}</b></p>` : ""}
+        <p class="fine">Send your order to us on ${how} and Zeen will confirm it.
+          ${orderId ? "Your order page updates as soon as it's confirmed, and again when it's baking and on its way." : ""}</p>
+        ${orderId ? `<a class="sent__track" href="${esc(trackUrl(orderId))}">${icon("receipt")} View order status</a>` : ""}
+      </div>`;
+    const foot = S.whatsapp
+      ? `<button class="btn btn--wa" type="button" data-final-send>${icon("whatsapp")} Send order on WhatsApp</button>`
+      : `<button class="btn btn--ig" type="button" data-final-send>${icon("instagram")} Copy order &amp; open Instagram</button>`;
+    const o = openSheet("Your order", body, foot);
+    $("[data-final-send]", o).addEventListener("click", () => {
+      deliverMessage(msg);
+      state.cart = [];
+      saveCart();
+      renderCards();
+    });
+  }
+
+  function deliverMessage(msg) {
+    if (S.whatsapp) {
+      window.open(`https://wa.me/${S.whatsapp}?text=${encodeURIComponent(msg)}`, "_blank", "noopener");
+      return;
+    }
+    const open = () => window.open(igDm, "_blank", "noopener");
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(msg).then(() => {
+        toast("Order copied! Paste it in our Instagram DM");
+        setTimeout(open, 900);
+      }, () => fallbackCopy(msg, open));
+    } else fallbackCopy(msg, open);
+  }
+
+  async function sendOrder(o) {
     const m = S.modes[state.mode];
     const err = $("[data-error]", o);
     const missing = [];
@@ -776,18 +875,13 @@
       return;
     }
     err.classList.add("hidden");
-    const msg = buildMessage();
-    if (S.whatsapp) {
-      window.open(`https://wa.me/${S.whatsapp}?text=${encodeURIComponent(msg)}`, "_blank", "noopener");
-      return;
-    }
-    const open = () => window.open(igDm, "_blank", "noopener");
-    if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(msg).then(() => {
-        toast("Order copied! Paste it in our Instagram DM");
-        setTimeout(open, 900);
-      }, () => fallbackCopy(msg, open));
-    } else fallbackCopy(msg, open);
+    const btn = $("[data-send]", o);
+    btn.disabled = true;
+    btn.textContent = "Placing your order…";
+    const id = await createOrder();
+    const msg = buildMessage(id);
+    if (id) rememberOrder(id);
+    showSendSheet(msg, id);
   }
 
   function fallbackCopy(msg, then) {
@@ -807,6 +901,158 @@
     }
   }
 
+  /* ---------- Order status page ---------- */
+  const STEPS = ["placed", "confirmed", "baking", "ready", "completed"];
+  function statusInfo(order) {
+    const pickup = order.mode === "pickup";
+    return {
+      placed: { icon: "clock", label: "Order received", text: "We've got your order! Zeen will confirm it on chat shortly." },
+      confirmed: { icon: "check", label: "Confirmed", text: "Yay! Your order is confirmed and on our baking schedule." },
+      baking: { icon: "flame", label: "Baking", text: "Your treats are in the oven right now. Smells amazing in here." },
+      ready: pickup
+        ? { icon: "bag", label: "Ready for pick-up", text: "Your order is packed and ready. See you soon!" }
+        : { icon: "truck", label: "Out for delivery", text: "Your order is on its way to you." },
+      completed: pickup
+        ? { icon: "heart", label: "Picked up", text: `Enjoy every bite! Tag us @${S.instagram} 💗` }
+        : { icon: "heart", label: "Delivered", text: `Enjoy every bite! Tag us @${S.instagram} 💗` },
+      cancelled: { icon: "x", label: "Cancelled", text: "This order was cancelled. Message us if this is unexpected." }
+    }[order.status] || { icon: "clock", label: order.status, text: "" };
+  }
+  const fmtTime = (t) => new Date(t).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  const fmtDate = (d) => (d ? new Date(d + "T00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : "");
+  const orderTotal = (o) => (o.finalTotal != null ? o.finalTotal : o.total);
+
+  function orderDetailsHtml(o) {
+    const pickup = o.mode === "pickup";
+    const rows = o.items.map((i) => `
+      <div class="track-item"><span>${i.qty} × ${esc(i.name)}<small>${esc(i.options)}</small></span><b>${rupee(i.price)}</b></div>`).join("");
+    const d = o.delivery;
+    return `
+      ${rows}
+      <div class="summary summary--sub"><span>Subtotal</span><span>${rupee(o.subtotal)}</span></div>
+      ${d ? `<div class="summary summary--sub"><span>Delivery${d.km ? ` (${d.km} km)` : ""}</span><span>${d.charge == null ? "To be confirmed" : rupee(d.charge)}</span></div>` : ""}
+      <div class="summary"><span>${o.finalTotal != null ? "Final total" : "Total"}</span><span>${rupee(orderTotal(o))}</span></div>
+      <dl class="track-meta">
+        <div><dt>${pickup ? "Pick-up" : "Delivery"}</dt><dd>${esc(fmtDate(o.date))}${o.time ? " · " + esc(o.time) : ""} · ${esc(o.city)}</dd></div>
+        <div><dt>Name</dt><dd>${esc(o.customer.name)} · ${esc(o.customer.phone)}</dd></div>
+        ${o.recipient ? `<div><dt>Gift for</dt><dd>${esc(o.recipient.name)} · ${esc(o.recipient.phone)}</dd></div>` : ""}
+        ${o.address ? `<div><dt>Address</dt><dd>${esc(o.address)}${o.landmark ? ", " + esc(o.landmark) : ""}</dd></div>` : ""}
+        ${o.giftNote ? `<div><dt>Gift note</dt><dd>“${esc(o.giftNote)}”</dd></div>` : ""}
+        ${o.note ? `<div><dt>Notes</dt><dd>${esc(o.note)}</dd></div>` : ""}
+      </dl>`;
+  }
+
+  function initOrder() {
+    const root = $("#order");
+    const id = (new URLSearchParams(location.search).get("id") || "").toUpperCase();
+    if (!id) return renderMyOrders(root);
+    let last = null, timer = null;
+
+    async function load() {
+      try {
+        const res = await fetch(`api/orders?id=${encodeURIComponent(id)}`, { cache: "no-store" });
+        if (res.status === 404) return renderError(root, "We couldn't find that order. Please check the link, or message us.");
+        if (!res.ok) throw new Error();
+        const o = await res.json();
+        if (last && last.status !== o.status) notifyStatus(o);
+        if (!last || last.updatedAt !== o.updatedAt) renderOrder(root, o);
+        last = o;
+      } catch (e) {
+        if (!last) renderError(root, "Order tracking isn't available right now. Please message us for an update.");
+      }
+    }
+    load();
+    const tick = () => { clearTimeout(timer); timer = setTimeout(async () => { if (!document.hidden) await load(); tick(); }, 20000); };
+    tick();
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+    root.addEventListener("click", (e) => {
+      if (e.target.closest("[data-notify]")) enableNotifications(root);
+      if (e.target.closest("[data-refresh]")) { load(); toast("Updated"); }
+    });
+  }
+
+  function renderOrder(root, o) {
+    const info = statusInfo(o);
+    const reached = new Map(o.history.map((h) => [h.status, h.at]));
+    const idx = STEPS.indexOf(o.status);
+    const steps = o.status === "cancelled" ? "" : `
+      <ol class="steps">${STEPS.map((st, i) => {
+        const si = statusInfo({ ...o, status: st });
+        const cls = i < idx ? "done" : i === idx ? "current" : "";
+        return `<li class="${cls}"><span class="steps__dot">${icon(i <= idx ? "check" : si.icon)}</span>
+          <span class="steps__label">${esc(si.label)}${reached.has(st) ? `<small>${fmtTime(reached.get(st))}</small>` : ""}</span></li>`;
+      }).join("")}</ol>`;
+    const canNotify = "Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied" && !["completed", "cancelled"].includes(o.status);
+    const contact = S.whatsapp
+      ? `<a class="btn btn--wa" href="https://wa.me/${S.whatsapp}?text=${encodeURIComponent(`Hi! About my order ${o.id}`)}" target="_blank" rel="noopener">${icon("whatsapp")} Message us</a>`
+      : `<a class="btn btn--ig" href="${igDm}" target="_blank" rel="noopener">${icon("instagram")} Message us</a>`;
+    root.innerHTML = `
+      <section class="track-status track-status--${esc(o.status)}">
+        <div class="track-status__icon">${icon(info.icon)}</div>
+        <p class="track-status__id">Order ${esc(o.id)}</p>
+        <h1>${esc(info.label)}</h1>
+        <p>${esc(info.text)}</p>
+        ${o.ownerNote ? `<blockquote class="owner-note"><b>A note from Zeen</b>${esc(o.ownerNote)}</blockquote>` : ""}
+      </section>
+      ${steps}
+      <div class="track-actions">
+        ${canNotify ? `<button class="chip-btn" type="button" data-notify>${icon("bell")} Notify me on this device</button>` : ""}
+        <button class="chip-btn" type="button" data-refresh>${icon("refresh")} Refresh</button>
+      </div>
+      <section class="track-card">
+        <h2>Order details</h2>
+        <p class="fine">Placed ${fmtTime(o.createdAt)}</p>
+        ${orderDetailsHtml(o)}
+      </section>
+      <div class="track-foot">${contact}<a class="btn btn--light" href="menu.html">Order something else</a></div>
+      <p class="fine" style="text-align:center;margin-top:14px">This page updates automatically. Bookmark it to check back anytime.</p>`;
+    document.title = `${info.label} · Order ${o.id} · ${S.name}`;
+  }
+
+  function renderError(root, msg) {
+    root.innerHTML = `<section class="track-status track-status--cancelled"><div class="track-status__icon">${icon("receipt")}</div><h1>Hmm…</h1><p>${esc(msg)}</p></section>
+      <div class="track-foot"><a class="btn" href="menu.html">Back to the menu</a></div>`;
+  }
+
+  function renderMyOrders(root) {
+    const list = store.get("orders", []);
+    root.innerHTML = `
+      <h1 class="page-title">My orders</h1>
+      ${list.length ? `<p class="page-sub">Orders placed from this device.</p>
+        <div class="my-orders">${list.map((o) => `
+          <a class="my-order" href="order.html?id=${encodeURIComponent(o.id)}">
+            <span>${icon("receipt")}</span>
+            <span class="my-order__main"><b>${esc(o.id)}</b><small>${fmtTime(o.at)} · ${o.items} item${o.items > 1 ? "s" : ""} · ${rupee(o.total)}</small></span>
+            ${icon("right")}
+          </a>`).join("")}</div>`
+        : `<p class="page-sub">No orders from this device yet. If you have an order link from us, open it to see your order status.</p>
+           <a class="btn" href="menu.html" style="display:inline-flex;flex:none">Browse the menu</a>`}`;
+  }
+
+  async function enableNotifications(root) {
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm === "granted") {
+        if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+        toast("We'll notify you here while this page is open");
+        const b = $("[data-notify]", root);
+        if (b) b.remove();
+      }
+    } catch (e) { /* unsupported */ }
+  }
+
+  async function notifyStatus(o) {
+    const info = statusInfo(o);
+    toast(`${info.label}! ${info.text}`);
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    const opts = { body: info.text, icon: "assets/img/logo.png", badge: "assets/img/favicon.png", tag: o.id, data: { url: location.href } };
+    try {
+      const reg = "serviceWorker" in navigator && (await navigator.serviceWorker.getRegistration());
+      if (reg) reg.showNotification(`${info.label} · ${S.name}`, opts);
+      else new Notification(`${info.label} · ${S.name}`, opts);
+    } catch (e) { /* notifications unsupported */ }
+  }
+
   /* ---------- Gallery page ---------- */
   function initGallery() {
     const g = $(".gallery");
@@ -823,6 +1069,9 @@
     $$("[data-ig]").forEach((a) => { a.href = igUrl; });
   }
 
+  // Shared with the owner dashboard (js/admin.js).
+  window.SY = { $, $$, icon, esc, rupee, toast, store, statusInfo, orderDetailsHtml, fmtTime, fmtDate, orderTotal, trackUrl, hydrateIcons, STEPS };
+
   /* ---------- Boot ---------- */
   document.addEventListener("DOMContentLoaded", () => {
     hydrateIcons();
@@ -831,6 +1080,7 @@
     if (page === "landing") initLanding();
     if (page === "menu") initMenu();
     if (page === "gallery") initGallery();
+    if (page === "order") initOrder();
     $$("[data-ig]").forEach((a) => { a.href = igUrl; });
     renderCartCount();
   });

@@ -11,6 +11,9 @@ It is plain HTML/CSS/JS with no build step and no backend.
 | `menu.html` | Menu with search, sort, category tabs, banner slider, collapsible sections, product cards with an options sheet (size / flavour), cart and checkout |
 | `gallery.html` | Photo grid with lightbox |
 | `policies.html` | Terms, privacy, delivery and refund policies |
+| `order.html` | Customer's live order status page (`order.html?id=SY-…`); without an id it lists orders placed from that device |
+| `admin.html` | Owner dashboard (password protected): confirm orders, update status, message customers |
+| `api/` | Vercel serverless functions that store orders in Upstash Redis |
 
 ## How ordering works
 
@@ -33,6 +36,24 @@ The delivery charge, total and a Google Maps link to the pin are included in the
 Configure it under `delivery` in `js/config.js`. **Set the real kitchen coordinates**: in Google Maps, long-press the kitchen and copy the `lat, lng` numbers shown.
 
 The cart and the customer's details are saved in the browser (localStorage), so nothing is stored on a server.
+
+## Order tracking (Vercel)
+
+1. Customer taps **Place order** → the order is saved and gets an ID like `SY-M6V5H3MK`.
+   The WhatsApp/Instagram message includes the ID and a tracking link.
+2. Zeen opens **`/admin.html`**, taps **Confirm order**, then **WhatsApp** (or **Copy message** for Instagram)
+   to send the customer a ready-made update with their link.
+3. The customer's order page updates by itself (Order received → Confirmed → Baking → Ready / Out for delivery → Delivered),
+   shows Zeen's note and any adjusted final total, and can show a browser notification while it's open.
+
+### One-time setup in Vercel
+
+1. **Storage → Create Database → Upstash for Redis** (free plan) → connect it to this project.
+   This adds `KV_REST_API_URL` and `KV_REST_API_TOKEN` automatically.
+2. **Settings → Environment Variables** → add `ADMIN_PASSWORD` with a strong password for the dashboard.
+3. **Redeploy** (Deployments → ⋯ → Redeploy) so the functions pick up the new variables.
+
+Without these, or on a static-only host like GitHub Pages, checkout falls back to plain ordering by DM (no tracking link).
 
 ## Editing content
 
