@@ -23,6 +23,24 @@ window.SITE = {
   hours: "Baked fresh to order · Please order at least 1 day in advance",
   leadDays: 1,
 
+  /*
+   * Distance-based delivery charge.
+   * Charge = ratePerKm × distance (rounded up to the next km), never below minCharge.
+   * Kitchens: the pick-up / dispatch point in each city. The coordinates below are
+   * PLACEHOLDERS (city centre). In Google Maps, long-press the kitchen,
+   * copy the "lat, lng" numbers and paste them here.
+   */
+  delivery: {
+    ratePerKm: 20,
+    minCharge: 0,
+    maxKm: 25,
+    roadFactor: 1.3, // used to estimate road distance when the routing service is unreachable
+    kitchens: {
+      Chennai: { lat: 13.0827, lng: 80.2707 },
+      Bengaluru: { lat: 12.9716, lng: 77.5946 }
+    }
+  },
+
   modes: {
     pickup: { label: "Self Pick-up", icon: "bag", needsAddress: false },
     delivery: { label: "Home Delivery", icon: "truck", needsAddress: true },

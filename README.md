@@ -19,6 +19,19 @@ The business takes orders by DM, so checkout builds a ready-to-send order messag
 - If `whatsapp` is set in `js/config.js`, the message opens in WhatsApp.
 - Otherwise the message is copied to the clipboard and Instagram DM (`ig.me/m/sweetlyyours.byzeen`) opens so the customer can paste it.
 
+### Delivery charge by distance
+
+For **Get it Delivered** and **Send as a Gift**, the customer pins their location in checkout: they search an area, tap **Use my current location**, or tap/drag the pin on the map.
+The site works out the road distance from the kitchen in the chosen city and charges `ratePerKm` for every km, rounded up (6.4 km → 7 km × ₹20 = ₹140).
+The delivery charge, total and a Google Maps link to the pin are included in the order message.
+
+- Map: [Leaflet](https://leafletjs.com) + OpenStreetMap tiles (free, no API key)
+- Address search / auto-fill: OpenStreetMap Nominatim
+- Road distance: the public OSRM routing service. If it can't be reached, the site estimates the distance as the straight-line distance × `roadFactor` and marks it "approx."
+- Beyond `maxKm`, the order can still be sent and the delivery charge is marked "to be confirmed".
+
+Configure it under `delivery` in `js/config.js`. **Set the real kitchen coordinates**: in Google Maps, long-press the kitchen and copy the `lat, lng` numbers shown.
+
 The cart and the customer's details are saved in the browser (localStorage), so nothing is stored on a server.
 
 ## Editing content

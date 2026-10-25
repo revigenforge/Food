@@ -145,6 +145,7 @@
   /* ---------- Landing page ---------- */
   function initLanding() {
     $("[data-ig]").href = igUrl;
+    $("[data-rate-pill]").textContent = `${rupee(S.delivery.ratePerKm)} / km`;
     const sw = $(".city-switch");
     sw.innerHTML = S.cities.map((c) => `<button type="button" data-city="${esc(c)}" aria-pressed="${c === state.city}">${icon("pin", "icon")}${esc(c)}</button>`).join("");
     $$("svg", sw).forEach((s) => { s.style.width = "15px"; s.style.height = "15px"; });
@@ -433,6 +434,166 @@
     return d.toISOString().slice(0, 10);
   }
 
+  /* ---------- Distance-based delivery ---------- */
+  const D = S.delivery;
+  let mapInst = null;
+
+  function haversineKm(a, b) {
+    const R = 6371, rad = (d) => (d * Math.PI) / 180;
+    const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+
+  async function routeKm(from, to) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 7000);
+      const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=false`, { signal: ctrl.signal });
+      clearTimeout(timer);
+      const data = await res.json();
+      if (data.code === "Ok" && data.routes.length) return { km: data.routes[0].distance / 1000, source: "road" };
+    } catch (e) { /* fall back to an estimate */ }
+    return { km: haversineKm(from, to) * (D.roadFactor || 1.3), source: "approx" };
+  }
+
+  // { km, billedKm, charge } for the current pin, or null when not yet known.
+  function deliveryQuote() {
+    if (!S.modes[state.mode].needsAddress || details.km == null || details.kmFor !== state.city) return null;
+    const billedKm = Math.max(1, Math.ceil(details.km));
+    const outside = D.maxKm && details.km > D.maxKm;
+    return { km: details.km, billedKm, outside, charge: outside ? null : Math.max(D.minCharge || 0, billedKm * D.ratePerKm) };
+  }
+  const grandTotal = () => cartTotal() + ((deliveryQuote() || {}).charge || 0);
+
+  let leafletReady = null;
+  function loadLeaflet() {
+    if (window.L) return Promise.resolve();
+    if (leafletReady) return leafletReady;
+    leafletReady = new Promise((resolve, reject) => {
+      const css = document.createElement("link");
+      css.rel = "stylesheet";
+      css.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      document.head.appendChild(css);
+      const js = document.createElement("script");
+      js.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      js.onload = resolve;
+      js.onerror = () => { leafletReady = null; reject(new Error("map failed to load")); };
+      document.head.appendChild(js);
+    });
+    return leafletReady;
+  }
+
+  function updateDeliveryUI(o, status) {
+    const info = $(".loc-info", o);
+    const q = deliveryQuote();
+    if (info) {
+      if (status) info.innerHTML = status;
+      else if (!details.loc) info.textContent = "Search your area, use your current location, or tap the map to drop a pin.";
+      else if (!q) info.textContent = "Calculating distance…";
+      else {
+        const dist = `${details.kmSource === "approx" ? "~" : ""}${q.km.toFixed(1)} km${details.kmSource === "road" ? " by road" : " (approx.)"}`;
+        info.innerHTML = q.outside
+          ? `<b>${dist}</b>: outside our usual delivery area (up to ${D.maxKm} km). Send the order and we'll confirm delivery on chat.`
+          : `<b>${dist}</b> from our ${esc(state.city)} kitchen · Delivery <b>${rupee(q.charge)}</b> <span>(${q.billedKm} km × ${rupee(D.ratePerKm)})</span>`;
+      }
+    }
+    const dl = $("[data-delivery]", o);
+    if (dl) dl.textContent = !details.loc ? "Pin location" : !q ? "…" : q.outside ? "To be confirmed" : rupee(q.charge);
+    const gt = $("[data-grand]", o);
+    if (gt) gt.textContent = rupee(grandTotal());
+  }
+
+  async function setLocation(o, latlng, opts = {}) {
+    const loc = { lat: +latlng.lat.toFixed(6), lng: +latlng.lng.toFixed(6) };
+    details.loc = loc;
+    details.km = null;
+    store.set("details", details);
+    if (mapInst) mapInst.placePin(loc, opts.zoom);
+    updateDeliveryUI(o);
+    const city = state.city;
+    const r = await routeKm(D.kitchens[city], loc);
+    if (details.loc !== loc) return; // a newer pin superseded this one
+    Object.assign(details, { km: r.km, kmSource: r.source, kmFor: city });
+    store.set("details", details);
+    updateDeliveryUI(o);
+    if (opts.fillAddress !== false && !details.address.trim()) reverseGeocode(o, loc);
+  }
+
+  async function reverseGeocode(o, loc) {
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${loc.lat}&lon=${loc.lng}&zoom=18`);
+      const data = await res.json();
+      const ta = $("#f-address", o);
+      if (data.display_name && ta && !ta.value.trim() && details.loc === loc) {
+        ta.value = data.display_name;
+        details.address = data.display_name;
+        store.set("details", details);
+      }
+    } catch (e) { /* address stays manual */ }
+  }
+
+  async function searchPlaces(o, query) {
+    const box = $(".loc-results", o);
+    if (!query.trim()) return;
+    box.classList.remove("hidden");
+    box.innerHTML = `<p class="fine">Searching…</p>`;
+    const k = D.kitchens[state.city];
+    const vb = [k.lng - 0.6, k.lat + 0.6, k.lng + 0.6, k.lat - 0.6].join(",");
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=in&viewbox=${vb}&q=${encodeURIComponent(query)}`);
+      const list = await res.json();
+      box.innerHTML = list.length
+        ? list.map((p) => `<button type="button" data-place="${p.lat},${p.lon}">${icon("pin")}<span>${esc(p.display_name)}</span></button>`).join("")
+        : `<p class="fine">No places found. Try a nearby landmark, or tap the map.</p>`;
+    } catch (e) {
+      box.innerHTML = `<p class="fine">Search is unavailable right now. Please tap the map or use your location.</p>`;
+    }
+  }
+
+  async function initMap(o) {
+    const el = $("#loc-map", o);
+    if (!el) return;
+    if (mapInst) { mapInst.remove(); mapInst = null; }
+    try { await loadLeaflet(); } catch (e) {
+      el.innerHTML = `<p class="fine" style="padding:16px">The map couldn't load. Please type your full address and we'll confirm the delivery charge on chat.</p>`;
+      return;
+    }
+    if (!document.body.contains(el)) return;
+    const L = window.L, k = D.kitchens[state.city];
+    const map = L.map(el, { scrollWheelZoom: false }).setView(details.loc || k, details.loc ? 14 : 12);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(map);
+    L.marker(k, { icon: L.divIcon({ className: "map-kitchen", html: icon("bag"), iconSize: [32, 32] }), title: "Our kitchen" }).addTo(map);
+    const pinIcon = L.divIcon({ className: "map-pin", html: icon("pin"), iconSize: [36, 36], iconAnchor: [18, 34] });
+    let pin = null;
+    map.placePin = (loc, zoom) => {
+      if (!pin) {
+        pin = L.marker(loc, { icon: pinIcon, draggable: true }).addTo(map);
+        pin.on("dragend", () => setLocation(o, pin.getLatLng()));
+      } else pin.setLatLng(loc);
+      if (zoom) map.setView(loc, zoom);
+    };
+    if (details.loc) map.placePin(details.loc);
+    map.on("click", (e) => setLocation(o, e.latlng));
+    mapInst = map;
+    setTimeout(() => map.invalidateSize(), 250);
+    // Pin from another city, or distance not yet worked out: recalculate.
+    if (details.loc && (details.km == null || details.kmFor !== state.city)) setLocation(o, details.loc, { fillAddress: false });
+  }
+
+  function useMyLocation(o) {
+    if (!navigator.geolocation) { toast("Location isn't available on this device"); return; }
+    updateDeliveryUI(o, "Finding you…");
+    navigator.geolocation.getCurrentPosition(
+      (p) => setLocation(o, { lat: p.coords.latitude, lng: p.coords.longitude }, { zoom: 16 }),
+      () => { updateDeliveryUI(o); toast("Couldn't get your location. Search or tap the map instead."); },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
   function lineText(line) {
     const item = findItem(line.id);
     const opts = item.options.map((g, gi) => g.choices[line.picks[gi]].label).join(", ");
@@ -470,15 +631,31 @@
 
     const body = `
       ${items}
-      <div class="summary"><span>Subtotal</span><span>${rupee(cartTotal())}</span></div>
-      <p class="fine">${m.needsAddress ? "Delivery charges are extra and confirmed on chat (as per actual)." : `Pick-up location in ${esc(state.city)} is shared on confirmation.`} Prices are confirmed when we accept your order.</p>
+      <div class="summary${m.needsAddress ? " summary--sub" : ""}"><span>Subtotal</span><span>${rupee(cartTotal())}</span></div>
+      ${m.needsAddress ? `
+        <div class="summary summary--sub"><span>Delivery</span><span data-delivery></span></div>
+        <div class="summary"><span>Total</span><span data-grand></span></div>` : ""}
+      <p class="fine">${m.needsAddress ? `Delivery is ${rupee(D.ratePerKm)} per km from our ${esc(state.city)} kitchen.` : `Pick-up location in ${esc(state.city)} is shared on confirmation.`} Prices are confirmed when we accept your order.</p>
       <form class="form" novalidate>
         <h3>Order details</h3>
         <div class="field"><label>City</label><div class="seg">${citySeg}</div></div>
         <div class="field"><label>How would you like it?</label><div class="seg">${modeSeg}</div></div>
         <div class="field-row">${f("name", "Your name", "text", 'autocomplete="name" required')}${f("phone", "Phone", "tel", 'autocomplete="tel" inputmode="tel" required')}</div>
         ${m.gift ? `<div class="field-row">${f("recipient", "Recipient's name", "text", "required")}${f("recipientPhone", "Recipient's phone", "tel", 'inputmode="tel" required')}</div>` : ""}
-        ${m.needsAddress ? f("address", m.gift ? "Recipient's address" : "Delivery address", "textarea", 'autocomplete="street-address" required') + f("landmark", "Landmark / pincode") : ""}
+        ${m.needsAddress ? `
+          <div class="field">
+            <label for="loc-q">Pin the delivery location</label>
+            <div class="loc-search">
+              <input id="loc-q" type="search" placeholder="Search area, street or landmark" autocomplete="off">
+              <button type="button" class="loc-btn" data-loc-search aria-label="Search">${icon("search")}</button>
+            </div>
+            <div class="loc-results hidden"></div>
+            <button type="button" class="loc-gps" data-loc-gps>${icon("pin")} Use my current location</button>
+            <div id="loc-map" class="map" aria-label="Map: tap to set the delivery location"></div>
+            <p class="loc-info"></p>
+          </div>` +
+          f("address", m.gift ? "Recipient's address" : "Delivery address", "textarea", 'autocomplete="street-address" required') +
+          f("landmark", "Flat / landmark / pincode") : ""}
         <div class="field-row">${f("date", m.needsAddress ? "Delivery date" : "Pick-up date", "date", `min="${minDate()}" required`)}${f("time", "Preferred time", "time")}</div>
         ${m.gift ? f("message", "Gift note (we'll write it by hand)", "textarea", 'maxlength="200"') : ""}
         ${f("note", "Anything else? (allergies, occasion…)", "textarea")}
@@ -492,7 +669,23 @@
     $(".form", o).addEventListener("input", (e) => {
       if (e.target.name) { details[e.target.name] = e.target.value; store.set("details", details); }
     });
+    if (m.needsAddress) {
+      updateDeliveryUI(o);
+      initMap(o);
+      $("#loc-q", o).addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); searchPlaces(o, e.target.value); }
+      });
+    }
     o.addEventListener("click", (e) => {
+      if (e.target.closest("[data-loc-search]")) { searchPlaces(o, $("#loc-q", o).value); return; }
+      if (e.target.closest("[data-loc-gps]")) { useMyLocation(o); return; }
+      const place = e.target.closest("[data-place]");
+      if (place) {
+        const [lat, lng] = place.dataset.place.split(",").map(Number);
+        $(".loc-results", o).classList.add("hidden");
+        setLocation(o, { lat, lng }, { zoom: 16 });
+        return;
+      }
       const d = e.target.closest("[data-d]");
       if (d) {
         const line = state.cart[+d.dataset.line];
@@ -532,15 +725,26 @@
       "",
       ...lines,
       "",
-      `Subtotal: ${rupee(cartTotal())}`,
+      `Subtotal: ${rupee(cartTotal())}`
+    ];
+    const q = deliveryQuote();
+    if (m.needsAddress && q) {
+      const dist = `${q.km.toFixed(1)} km${details.kmSource === "approx" ? " (approx.)" : ""}`;
+      out.push(q.outside
+        ? `Delivery: ${dist}, outside delivery area, please confirm`
+        : `Delivery: ${dist} → ${q.billedKm} km × ${rupee(D.ratePerKm)} = ${rupee(q.charge)}`);
+      out.push(`Total: ${rupee(grandTotal())}`);
+    }
+    out.push(
       "",
       `City: ${state.city}`,
       `Order type: ${m.label}`,
       `Name: ${details.name}`,
       `Phone: ${details.phone}`
-    ];
+    );
     if (m.gift) out.push(`Recipient: ${details.recipient} (${details.recipientPhone})`);
     if (m.needsAddress) out.push(`Address: ${details.address}${details.landmark ? ", " + details.landmark : ""}`);
+    if (m.needsAddress && details.loc) out.push(`Location: https://www.google.com/maps?q=${details.loc.lat},${details.loc.lng}`);
     out.push(`${m.needsAddress ? "Delivery" : "Pick-up"} on: ${details.date}${details.time ? " at " + details.time : ""}`);
     if (m.gift && details.message) out.push(`Gift note: "${details.message}"`);
     if (details.note) out.push(`Notes: ${details.note}`);
@@ -556,6 +760,13 @@
     if (m.gift && !details.recipient.trim()) missing.push("recipient's name");
     if (m.gift && !details.recipientPhone.trim()) missing.push("recipient's phone");
     if (m.needsAddress && !details.address.trim()) missing.push("address");
+    // Only insist on a pin when the map actually loaded; otherwise the address is enough.
+    if (m.needsAddress && !details.loc && window.L) missing.push("your location on the map");
+    if (!missing.length && m.needsAddress && details.loc && !deliveryQuote()) {
+      err.textContent = "Still calculating the delivery distance. Please try again in a second.";
+      err.classList.remove("hidden");
+      return;
+    }
     if (!details.date) missing.push("date");
     else if (details.date < minDate()) missing.push(`a date from ${minDate()} (we bake fresh to order)`);
     if (missing.length) {

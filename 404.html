@@ -3,19 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    // Works on Vercel (site at /) and GitHub Pages (site at ).
+    document.write('<base href="' + (location.hostname.endsWith("github.io") ? "/Food/" : "/") + '">');
+  </script>
   <title>Page not found · Sweetly Yours by Zeen</title>
-  <link rel="icon" href="/Food/assets/img/favicon.png">
-  <link rel="stylesheet" href="/Food/css/style.css">
+  <link rel="icon" href="assets/img/favicon.png">
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <main class="landing">
     <div class="landing__card">
-      <img class="landing__logo" src="/Food/assets/img/logo.png" alt="Sweetly Yours logo">
+      <img class="landing__logo" src="assets/img/logo.png" alt="Sweetly Yours logo">
       <h1 class="landing__name">Oops!</h1>
       <p class="landing__tagline">This page got eaten. Let's get you back to the treats.</p>
     </div>
     <nav class="mode-list">
-      <a class="mode-btn mode-btn--primary" href="/Food/menu.html">See the menu</a>
+      <a class="mode-btn mode-btn--primary" href="menu.html">See the menu</a>
     </nav>
   </main>
 </body>
