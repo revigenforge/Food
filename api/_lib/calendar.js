@@ -1,4 +1,4 @@
-// Adds confirmed orders to Zeen's Google Calendar through a Google service account.
+// Adds orders to Zeen's Google Calendar (as soon as they're placed) through a Google service account.
 // Setup: GOOGLE_SERVICE_ACCOUNT_JSON (the key file's contents) and GOOGLE_CALENDAR_ID
 // (his Gmail address), with the calendar shared to the service account's email.
 // The 30-minute alert comes from the calendar's default notification setting.

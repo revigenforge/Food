@@ -2,6 +2,22 @@
 // POST /api/orders { action: "payment", id, ref }  → customer submits their UPI transaction ID
 // GET  /api/orders?id=…                            → order status page data (public, by unguessable id)
 const { HttpError, newId, getOrder, saveOrder, allow, send, handle } = require("./_lib/store");
+const calendar = require("./_lib/calendar");
+
+// New orders go straight into Zeen's Google Calendar (when configured). A slow or failing
+// calendar never holds up the customer's order.
+async function addToCalendar(order, req) {
+  if (!calendar.configured()) return;
+  const host = req.headers["x-forwarded-host"] || req.headers.host;
+  try {
+    order.calendarEventId = await Promise.race([
+      calendar.addOrder(order, host ? `https://${host}` : ""),
+      new Promise((resolve) => setTimeout(() => resolve(null), 4000))
+    ]);
+  } catch (e) {
+    console.error(e);
+  }
+}
 
 const str = (v, max = 200) => String(v == null ? "" : v).trim().slice(0, max);
 const num = (v) => (Number.isFinite(+v) && +v >= 0 ? Math.round(+v * 100) / 100 : 0);
@@ -88,6 +104,7 @@ module.exports = (req, res) => handle(res, async () => {
       finalTotal: null,
       payment: { status: "unpaid", ref: "" }
     };
+    await addToCalendar(order, req);
     await saveOrder(order, true);
     return send(res, 201, { id: order.id });
   }

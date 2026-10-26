@@ -73,7 +73,7 @@ Until `upiId` is a real UPI ID, the order page says online payment isn't active 
 
 On the dashboard every confirmed order has **Add to Google Calendar** (one tap, no setup).
 
-For fully automatic syncing (confirmed orders appear in the calendar by themselves, cancelled ones disappear):
+For fully automatic syncing (every new order appears in the calendar at its slot as soon as it's placed; orders cancelled on the dashboard disappear):
 
 1. [Google Cloud Console](https://console.cloud.google.com/) → create a project → **APIs & Services → Library** → enable **Google Calendar API**.
 2. **IAM & Admin → Service Accounts** → create one → **Keys → Add key → JSON** (a file downloads).

@@ -4,7 +4,8 @@
 const { STATUSES, HttpError, getOrder, saveOrder, listOrders, allow, isAdmin, send, handle } = require("./_lib/store");
 const calendar = require("./_lib/calendar");
 
-// Confirmed orders go into Zeen's Google Calendar; cancelled ones come out again.
+// Orders are added to Zeen's Google Calendar when placed (api/orders.js); this catches any
+// that were missed (e.g. calendar set up later) when confirmed, and removes cancelled ones.
 // A calendar problem never blocks the status change itself.
 async function syncCalendar(order, req) {
   if (!calendar.configured()) return null;
