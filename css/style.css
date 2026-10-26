@@ -716,13 +716,8 @@ footer {
 .loc-results .fine { margin: 4px 6px; }
 .loc-gps { justify-self: start; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; border: 1.5px solid var(--blush-deep); color: var(--rose-dark); font-weight: 600; font-size: 13.5px; }
 .loc-gps svg { width: 16px; height: 16px; }
-.map { height: 240px; border-radius: 14px; overflow: hidden; background: var(--blush); border: 1.5px solid var(--line); z-index: 0; }
 .loc-info { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--cocoa); }
 .loc-info span { color: var(--muted); }
-.map-pin { color: var(--rose-dark); }
-.map-pin svg { width: 36px; height: 36px; fill: #fff; filter: drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
-.map-kitchen { display: grid; place-items: center; border-radius: 50%; background: var(--cocoa); color: #fff; box-shadow: 0 0 0 3px #fff, 0 2px 6px rgba(0,0,0,.3); }
-.map-kitchen svg { width: 18px; height: 18px; }
 
 /* ---------- Order placed sheet ---------- */
 .sent { text-align: center; padding: 8px 0 4px; }
@@ -850,3 +845,44 @@ body[data-page="admin"] main { padding-top: 6px; max-width: 760px; }
 .status-pill--pay-submitted { background: #fbf0d6; color: #8a6514; }
 .status-pill--pay-paid { background: #e7f4ea; color: var(--green); }
 .chip-btn { white-space: nowrap; flex: none; }
+
+/* ---------- Prep info, slots, add-ons, store address ---------- */
+.prep-info { margin-top: 14px; padding: 14px; border-radius: 14px; background: var(--cream); border: 1px solid var(--line); font-size: 14px; }
+.prep-info > div:first-child { display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--cocoa); }
+.prep-info > div:first-child span { display: inline-flex; align-items: center; gap: 6px; }
+.prep-info svg { width: 16px; height: 16px; color: var(--rose-dark); }
+.prep-info p { margin: 10px 0 0; color: var(--muted); line-height: 1.5; font-size: 13.5px; }
+.prep-info__links { display: flex; gap: 16px; margin-top: 8px; }
+.prep-info__links a { display: inline-flex; align-items: center; gap: 6px; color: var(--rose-dark); font-weight: 600; text-decoration: none; font-size: 13.5px; }
+.slots { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+@media (min-width: 480px) { .slots { grid-template-columns: repeat(4, 1fr); } }
+.slot { padding: 10px 6px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--cream); font-size: 13.5px; font-weight: 600; color: var(--cocoa); }
+.slot[aria-pressed="true"] { background: var(--cocoa); border-color: var(--cocoa); color: #fff; }
+.slot:disabled { opacity: .4; text-decoration: line-through; cursor: not-allowed; }
+.store-addr { display: flex; gap: 10px; align-items: flex-start; margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--cream); font-size: 13.5px; }
+.store-addr svg { flex: none; width: 18px; height: 18px; margin-top: 1px; color: var(--rose-dark); }
+.store-addr b { display: block; color: var(--cocoa); }
+.store-addr span { color: var(--muted); line-height: 1.5; }
+.loc-gps--big { justify-self: stretch; justify-content: center; padding: 12px 16px; font-size: 14.5px; background: #fff7f4; }
+.loc-skip { justify-self: start; font-size: 13px; padding: 0; }
+.addons { display: grid; gap: 8px; padding: 14px; border-radius: 16px; background: linear-gradient(135deg, #fff3ef, #fdf7f3); border: 1.5px solid var(--blush-deep); }
+.addons h3 { margin: 0 0 4px; font-family: var(--serif); font-size: 22px; color: var(--cocoa); }
+.addons h3 small { font-family: var(--sans); font-size: 13px; font-weight: 500; color: var(--muted); }
+.addon { padding: 10px 12px; border-radius: 12px; background: #fff; border: 1.5px solid var(--line); }
+.addon--on { border-color: var(--rose); }
+.addon__row { display: flex; align-items: center; gap: 10px; }
+.addon__info { flex: 1; min-width: 0; font-size: 14.5px; }
+.addon__price { color: var(--rose-dark); font-weight: 700; margin-left: 4px; }
+.addon__info small { display: block; color: var(--muted); font-size: 12.5px; line-height: 1.4; margin-top: 2px; }
+.addon-toggle { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 7px 14px; border-radius: 999px; border: 1.5px solid var(--rose); color: var(--rose-dark); font-weight: 700; font-size: 13px; }
+.addon-toggle svg { width: 14px; height: 14px; }
+.addon-toggle[aria-pressed="true"] { background: var(--rose-dark); border-color: var(--rose-dark); color: #fff; }
+.addon .qty { flex: none; }
+.addon__text { width: 100%; margin-top: 10px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--cream); outline: 0; font-size: 14.5px; }
+.addon__text:focus { border-color: var(--rose); background: #fff; }
+.addon__count { display: block; text-align: right; color: var(--muted); font-size: 11.5px; margin-top: 3px; }
+.chip-btn--done { border-color: #b9dfc2; color: var(--green); background: #f3faf5; }
+@media (max-width: 400px) {
+  .mode-btn { font-size: 13px; letter-spacing: .03em; padding: 12px 16px; gap: 8px; }
+  .mode-btn .pill { font-size: 10px; padding: 4px 8px; }
+}

@@ -13,7 +13,7 @@ It is plain HTML/CSS/JS with no build step and no backend.
 | `policies.html` | Terms, privacy, delivery and refund policies |
 | `order.html` | Customer's live order status page (`order.html?id=SY-…`); without an id it lists orders placed from that device |
 | `admin.html` | Owner dashboard (password protected): confirm orders, update status, message customers |
-| `api/` | Vercel serverless functions that store orders in Upstash Redis |
+| `api/` | Vercel serverless functions that store orders in Upstash Redis (and sync Google Calendar) |
 
 ## How ordering works
 
@@ -24,16 +24,15 @@ The business takes orders by DM, so checkout builds a ready-to-send order messag
 
 ### Delivery charge by distance
 
-For **Get it Delivered** and **Send as a Gift**, the customer pins their location in checkout: they search an area, tap **Use my current location**, or tap/drag the pin on the map.
+For **Get it Delivered** and **Send as a Gift**, the customer taps **Use my current location** or searches the address (or skips, and the charge is confirmed on chat).
 The site works out the road distance from the kitchen in the chosen city and charges `ratePerKm` for every km, rounded up (6.4 km → 7 km × ₹20 = ₹140).
 The delivery charge, total and a Google Maps link to the pin are included in the order message.
 
-- Map: [Leaflet](https://leafletjs.com) + OpenStreetMap tiles (free, no API key)
-- Address search / auto-fill: OpenStreetMap Nominatim
+- Address search / auto-fill: OpenStreetMap Nominatim (free, no API key)
 - Road distance: the public OSRM routing service. If it can't be reached, the site estimates the distance as the straight-line distance × `roadFactor` and marks it "approx."
 - Beyond `maxKm`, the order can still be sent and the delivery charge is marked "to be confirmed".
 
-Configure it under `delivery` in `js/config.js`. **Set the real kitchen coordinates**: in Google Maps, long-press the kitchen and copy the `lat, lng` numbers shown.
+Configure it under `delivery` in `js/config.js`; each kitchen's `address` is shown as the store address at checkout. **Set the real kitchen coordinates**: in Google Maps, long-press the kitchen and copy the `lat, lng` numbers shown.
 
 The cart and the customer's details are saved in the browser (localStorage), so nothing is stored on a server.
 
@@ -62,6 +61,25 @@ Zeen checks his UPI or bank app and taps **Mark as paid**, and the customer's pa
 Set it up under `payment` in `js/config.js`: `upiId` (a business UPI ID works best with Google Pay), the payee name,
 an optional `qrImage` (Zeen's own QR scanner image), when customers can pay (`payAfter`) and `advancePercent`.
 Until `upiId` is a real UPI ID, the order page says online payment isn't active yet.
+
+### Time slots, prep time and gift add-ons
+
+- Checkout offers 30-minute slots (`slots` in `js/config.js`, 5–9 PM). For same-day orders, slots within the prep time (`orderInfo.prepHours`) are greyed out.
+- Every product shows the prep time, first dispatch slot and the "need it urgently?" note (`orderInfo`).
+- **Send as a Gift** offers add-ons (`giftAddons`): gift note, chocolate message (20 characters), candles, roses, bouquet. They're added to the total and listed on the order.
+- OG Cookie Pie lets customers mix flavours: up to `flavours` per size (Couple 2, Family 3, Celebration 3).
+
+### Google Calendar
+
+On the dashboard every confirmed order has **Add to Google Calendar** (one tap, no setup).
+
+For fully automatic syncing (confirmed orders appear in the calendar by themselves, cancelled ones disappear):
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → create a project → **APIs & Services → Library** → enable **Google Calendar API**.
+2. **IAM & Admin → Service Accounts** → create one → **Keys → Add key → JSON** (a file downloads).
+3. In Google Calendar → **Settings → (Zeen's calendar) → Share with specific people** → add the service account's email with **Make changes to events**.
+4. Same settings page → **Event notifications** → set **30 minutes before** (this is the alert for website orders).
+5. In Vercel → Environment Variables: `GOOGLE_SERVICE_ACCOUNT_JSON` = the whole contents of the JSON file, `GOOGLE_CALENDAR_ID` = Zeen's Gmail address. Redeploy.
 
 Without these, or on a static-only host like GitHub Pages, checkout falls back to plain ordering by DM (no tracking link).
 

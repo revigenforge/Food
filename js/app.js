@@ -86,15 +86,23 @@
   const saveCart = () => { store.set("cart", state.cart); renderCartCount(); };
   const findItem = (id) => S.items.find((i) => i.id === id);
 
+  // Multi-select groups (e.g. "mix up to 3 flavours"): the limit comes from the chosen size.
+  const multiLimit = (item, picks) => item.options[0].choices[picks[0]].flavours || item.options[0].choices.length;
+  const pickList = (g, pick) => (g.multi ? (Array.isArray(pick) ? pick : [pick || 0]) : [pick || 0]);
+
   function priceRange(item) {
     const base = item.options[0].choices.map((c) => c.price);
-    const extra = item.options.slice(1).reduce((sum, g) => sum + Math.max(0, ...g.choices.map((c) => c.add || 0)), 0);
+    const maxPick = Math.max(...item.options[0].choices.map((c) => c.flavours || 1));
+    const extra = item.options.slice(1).reduce((sum, g) => {
+      const adds = g.choices.map((c) => c.add || 0).sort((a, b) => b - a);
+      return sum + (g.multi ? adds.slice(0, maxPick).reduce((a, b) => a + Math.max(0, b), 0) : Math.max(0, adds[0]));
+    }, 0);
     return [Math.min(...base), Math.max(...base) + extra];
   }
   function priceFor(item, picks) {
     return item.options.reduce((sum, g, gi) => {
-      const c = g.choices[picks[gi]] || g.choices[0];
-      return sum + (gi === 0 ? c.price : c.add || 0);
+      if (gi === 0) return sum + (g.choices[picks[0]] || g.choices[0]).price;
+      return sum + pickList(g, picks[gi]).reduce((a, ci) => a + ((g.choices[ci] || {}).add || 0), 0);
     }, 0);
   }
   const optionCount = (item) => item.options.reduce((n, g) => n * g.choices.length, 1);
@@ -106,7 +114,7 @@
   const qtyOfItem = (id) => state.cart.filter((l) => l.id === id).reduce((n, l) => n + l.qty, 0);
 
   function addToCart(id, picks, qty) {
-    const key = id + ":" + picks.join(",");
+    const key = id + ":" + JSON.stringify(picks);
     const line = state.cart.find((l) => l.key === key);
     if (line) line.qty += qty;
     else state.cart.push({ key, id, picks, qty });
@@ -156,7 +164,7 @@
   /* ---------- Landing page ---------- */
   function initLanding() {
     $("[data-ig]").href = igUrl;
-    $("[data-rate-pill]").textContent = `${rupee(S.delivery.ratePerKm)} / km`;
+    $("[data-rate-pill]").textContent = `Within ${S.delivery.maxKm} km radius`;
     const sw = $(".city-switch");
     sw.innerHTML = S.cities.map((c) => `<button type="button" data-city="${esc(c)}" aria-pressed="${c === state.city}">${icon("pin", "icon")}${esc(c)}</button>`).join("");
     $$("svg", sw).forEach((s) => { s.style.width = "15px"; s.style.height = "15px"; });
@@ -400,54 +408,155 @@
   function openProduct(id) {
     const item = findItem(id);
     if (!item) return;
-    const picks = item.options.map(() => 0);
+    const picks = item.options.map((g) => (g.multi ? [0] : 0));
     let qty = 1;
     const groups = item.options.map((g, gi) => `
-      <div class="opt-group">
-        <h3>${esc(g.name)} <small>Required</small></h3>
+      <div class="opt-group" data-group="${gi}">
+        <h3>${esc(g.name)} <small data-hint>${g.multi ? "" : "Required"}</small></h3>
         ${g.choices.map((c, ci) => `
           <label class="opt">
-            <input type="radio" name="g${gi}" value="${ci}" ${ci === 0 ? "checked" : ""}>
+            <input type="${g.multi ? "checkbox" : "radio"}" name="g${gi}" value="${ci}" ${ci === 0 ? "checked" : ""}>
             <span>${esc(c.label)}</span>
             <b>${gi === 0 ? rupee(c.price) : c.add ? "+ " + rupee(c.add) : ""}</b>
           </label>`).join("")}
       </div>`).join("");
+    const info = S.orderInfo ? `
+      <div class="prep-info">
+        <div><span>${icon("clock")} Prep time <b>${S.orderInfo.prepHours} hrs</b></span><span>${icon("truck")} First dispatch slot <b>${esc(S.orderInfo.firstDispatch)}</b></span></div>
+        <p>${esc(S.orderInfo.urgent)}</p>
+        <div class="prep-info__links">
+          <a href="${igDm}" target="_blank" rel="noopener">${icon("instagram")} DM us</a>
+          ${S.phone ? `<a href="tel:${esc(S.phone.replace(/\s/g, ""))}">${icon("phone")} Call us</a>` : ""}
+        </div>
+      </div>` : "";
     const o = openSheet(item.name,
       `<img class="product-hero" src="${esc(item.image)}" alt="${esc(item.name)}">
-       <p class="product-desc">${esc(item.description)}</p>${groups}`,
+       <p class="product-desc">${esc(item.description)}</p>${info}${groups}`,
       `<div class="foot-row">
          <div class="qty"><button type="button" data-q="-1" aria-label="Decrease">−</button><span>1</span><button type="button" data-q="1" aria-label="Increase">+</button></div>
          <button class="btn" type="button" data-confirm>Add · <span data-total></span></button>
        </div>`);
+    // Keep multi-select groups within the size's limit and disable extra boxes.
+    const syncMulti = () => {
+      item.options.forEach((g, gi) => {
+        if (!g.multi) return;
+        const limit = multiLimit(item, picks);
+        if (picks[gi].length > limit) picks[gi] = picks[gi].slice(0, limit);
+        $$(`input[name="g${gi}"]`, o).forEach((cb) => {
+          cb.checked = picks[gi].includes(+cb.value);
+          cb.disabled = !cb.checked && picks[gi].length >= limit;
+        });
+        $(`[data-group="${gi}"] [data-hint]`, o).textContent = `Choose up to ${limit}`;
+      });
+    };
     const update = () => { $("[data-total]", o).textContent = rupee(priceFor(item, picks) * qty); $(".qty span", o).textContent = qty; };
     o.addEventListener("change", (e) => {
       const m = e.target.name && e.target.name.match(/^g(\d+)$/);
-      if (m) { picks[+m[1]] = +e.target.value; update(); }
+      if (!m) return;
+      const gi = +m[1];
+      if (item.options[gi].multi) {
+        const v = +e.target.value;
+        picks[gi] = e.target.checked ? [...picks[gi], v] : picks[gi].filter((x) => x !== v);
+      } else picks[gi] = +e.target.value;
+      syncMulti();
+      update();
     });
     o.addEventListener("click", (e) => {
       const q = e.target.closest("[data-q]");
       if (q) { qty = Math.max(1, Math.min(20, qty + +q.dataset.q)); update(); }
       if (e.target.closest("[data-confirm]")) {
-        addToCart(item.id, picks.slice(), qty);
+        const empty = item.options.findIndex((g, gi) => g.multi && !picks[gi].length);
+        if (empty > -1) { toast(`Please choose at least one ${item.options[empty].name.toLowerCase().replace(/s$/, "")}`); return; }
+        addToCart(item.id, picks.map((p) => (Array.isArray(p) ? p.slice().sort((a, b) => a - b) : p)), qty);
         closeSheet();
         toast(`Added ${qty} × ${item.name}`);
       }
     });
+    syncMulti();
     update();
   }
 
   /* ---------- Cart + checkout ---------- */
-  const details = store.get("details", { name: "", phone: "", address: "", landmark: "", date: "", time: "", recipient: "", recipientPhone: "", note: "", message: "" });
+  const details = store.get("details", { name: "", phone: "", address: "", landmark: "", date: "", time: "", recipient: "", recipientPhone: "", note: "" });
+  details.addons = details.addons || {};
+  details.addonText = details.addonText || {};
 
+  const localDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   function minDate() {
     const d = new Date();
     d.setDate(d.getDate() + (S.leadDays || 0));
-    return d.toISOString().slice(0, 10);
+    return localDate(d);
+  }
+
+  /* ---------- Time slots ---------- */
+  const toMin = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; };
+  const toHHMM = (min) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+  const clock = (min) => { const h = Math.floor(min / 60), m = min % 60; return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")}`; };
+  const slotMinutes = () => (S.slots && S.slots.minutes) || 30;
+  function allSlots() {
+    if (!S.slots) return [];
+    const out = [];
+    for (let t = toMin(S.slots.start); t + slotMinutes() <= toMin(S.slots.end); t += slotMinutes()) out.push(toHHMM(t));
+    return out;
+  }
+  function slotLabel(hhmm) {
+    if (!/^\d{2}:\d{2}$/.test(hhmm || "")) return hhmm || "";
+    const a = toMin(hhmm), b = a + slotMinutes();
+    return `${clock(a)} – ${clock(b)} ${b >= 720 ? "PM" : "AM"}`;
+  }
+  // Same-day slots need the prep time; earlier ones are unavailable.
+  function slotOpen(date, hhmm) {
+    if (date !== localDate(new Date())) return true;
+    const now = new Date();
+    return toMin(hhmm) >= now.getHours() * 60 + now.getMinutes() + ((S.orderInfo && S.orderInfo.prepHours) || 0) * 60;
+  }
+  function slotsHtml() {
+    const date = details.date;
+    if (!date) return `<p class="fine">Choose a date to see the available slots.</p>`;
+    const list = allSlots();
+    const open = list.filter((t) => slotOpen(date, t));
+    if (!open.length) return `<p class="fine">No slots left for this date. Please choose another day.</p>`;
+    return `<div class="slots">${list.map((t) => {
+      const ok = slotOpen(date, t);
+      return `<button type="button" class="slot" data-slot="${t}" aria-pressed="${details.time === t && ok}" ${ok ? "" : "disabled"}>${slotLabel(t)}</button>`;
+    }).join("")}</div>`;
+  }
+
+  /* ---------- Gift add-ons ---------- */
+  const ADDONS = S.giftAddons || [];
+  function addonLines() {
+    if (!S.modes[state.mode].gift) return [];
+    return ADDONS.filter((a) => details.addons[a.id] > 0).map((a) => {
+      const qty = details.addons[a.id];
+      const text = a.text ? (details.addonText[a.id] || "").trim() : "";
+      return { ...a, qty, total: a.price * qty, message: text };
+    });
+  }
+  const addonsTotal = () => addonLines().reduce((n, a) => n + a.total, 0);
+  function addonsHtml() {
+    return `
+      <div class="addons">
+        <h3>Make it extra special <small>with add-ons</small></h3>
+        ${ADDONS.map((a) => {
+          const qty = details.addons[a.id] || 0;
+          const ctrl = (a.maxQty || 1) > 1
+            ? `<div class="qty qty--sm">${qty ? `<button type="button" data-addon="${a.id}" data-ad="-1" aria-label="Fewer">−</button><span>${qty}</span>` : ""}<button type="button" data-addon="${a.id}" data-ad="1" aria-label="Add">+</button></div>`
+            : `<button type="button" class="addon-toggle" data-addon="${a.id}" data-ad="${qty ? -1 : 1}" aria-pressed="${!!qty}">${qty ? icon("check") + " Added" : "Add"}</button>`;
+          return `
+            <div class="addon${qty ? " addon--on" : ""}">
+              <div class="addon__row">
+                <div class="addon__info"><b>${esc(a.name)}</b> <span class="addon__price">${rupee(a.price)}</span>${a.desc ? `<small>${esc(a.desc)}</small>` : ""}</div>
+                ${ctrl}
+              </div>
+              ${a.text && qty ? `<input class="addon__text" data-addon-text="${a.id}" maxlength="${a.text.max}" placeholder="${esc(a.text.placeholder || "")}" value="${esc(details.addonText[a.id] || "")}">
+                <small class="addon__count">${(details.addonText[a.id] || "").length}/${a.text.max} characters</small>` : ""}
+            </div>`;
+        }).join("")}
+      </div>`;
   }
 
   /* ---------- Distance-based delivery ---------- */
   const D = S.delivery;
-  let mapInst = null;
 
   function haversineKm(a, b) {
     const R = 6371, rad = (d) => (d * Math.PI) / 180;
@@ -475,32 +584,16 @@
     const outside = D.maxKm && details.km > D.maxKm;
     return { km: details.km, billedKm, outside, charge: outside ? null : Math.max(D.minCharge || 0, billedKm * D.ratePerKm) };
   }
-  const grandTotal = () => cartTotal() + ((deliveryQuote() || {}).charge || 0);
-
-  let leafletReady = null;
-  function loadLeaflet() {
-    if (window.L) return Promise.resolve();
-    if (leafletReady) return leafletReady;
-    leafletReady = new Promise((resolve, reject) => {
-      const css = document.createElement("link");
-      css.rel = "stylesheet";
-      css.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-      document.head.appendChild(css);
-      const js = document.createElement("script");
-      js.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-      js.onload = resolve;
-      js.onerror = () => { leafletReady = null; reject(new Error("map failed to load")); };
-      document.head.appendChild(js);
-    });
-    return leafletReady;
-  }
+  const grandTotal = () => cartTotal() + addonsTotal() + ((deliveryQuote() || {}).charge || 0);
 
   function updateDeliveryUI(o, status) {
     const info = $(".loc-info", o);
     const q = deliveryQuote();
     if (info) {
       if (status) info.innerHTML = status;
-      else if (!details.loc) info.textContent = "Search your area, use your current location, or tap the map to drop a pin.";
+      else if (!details.loc) info.textContent = details.locSkipped
+        ? "We'll confirm the delivery charge on chat."
+        : "Tap “Use my current location”, or search the delivery address, to calculate the delivery charge.";
       else if (!q) info.textContent = "Calculating distance…";
       else {
         const dist = `${details.kmSource === "approx" ? "~" : ""}${q.km.toFixed(1)} km${details.kmSource === "road" ? " by road" : " (approx.)"}`;
@@ -510,7 +603,9 @@
       }
     }
     const dl = $("[data-delivery]", o);
-    if (dl) dl.textContent = !details.loc ? "Pin location" : !q ? "…" : q.outside ? "To be confirmed" : rupee(q.charge);
+    if (dl) dl.textContent = !details.loc ? (details.locSkipped ? "To be confirmed" : "Calculated after entering address") : !q ? "Calculating…" : q.outside ? "To be confirmed" : rupee(q.charge);
+    const ad = $("[data-addons-total]", o);
+    if (ad) ad.textContent = rupee(addonsTotal());
     const gt = $("[data-grand]", o);
     if (gt) gt.textContent = rupee(grandTotal());
     const gb = $("[data-grand-btn]", o);
@@ -521,8 +616,8 @@
     const loc = { lat: +latlng.lat.toFixed(6), lng: +latlng.lng.toFixed(6) };
     details.loc = loc;
     details.km = null;
+    details.locSkipped = false;
     store.set("details", details);
-    if (mapInst) mapInst.placePin(loc, opts.zoom);
     updateDeliveryUI(o);
     const city = state.city;
     const r = await routeKm(D.kitchens[city], loc);
@@ -558,58 +653,25 @@
       const list = await res.json();
       box.innerHTML = list.length
         ? list.map((p) => `<button type="button" data-place="${p.lat},${p.lon}">${icon("pin")}<span>${esc(p.display_name)}</span></button>`).join("")
-        : `<p class="fine">No places found. Try a nearby landmark, or tap the map.</p>`;
+        : `<p class="fine">No places found. Try a nearby landmark or area name.</p>`;
     } catch (e) {
-      box.innerHTML = `<p class="fine">Search is unavailable right now. Please tap the map or use your location.</p>`;
+      box.innerHTML = `<p class="fine">Search is unavailable right now. Please use your current location, or skip and we'll confirm on chat.</p>`;
     }
-  }
-
-  async function initMap(o) {
-    const el = $("#loc-map", o);
-    if (!el) return;
-    if (mapInst) { mapInst.remove(); mapInst = null; }
-    try { await loadLeaflet(); } catch (e) {
-      el.innerHTML = `<p class="fine" style="padding:16px">The map couldn't load. Please type your full address and we'll confirm the delivery charge on chat.</p>`;
-      return;
-    }
-    if (!document.body.contains(el)) return;
-    const L = window.L, k = D.kitchens[state.city];
-    const map = L.map(el, { scrollWheelZoom: false }).setView(details.loc || k, details.loc ? 14 : 12);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-    }).addTo(map);
-    L.marker(k, { icon: L.divIcon({ className: "map-kitchen", html: icon("bag"), iconSize: [32, 32] }), title: "Our kitchen" }).addTo(map);
-    const pinIcon = L.divIcon({ className: "map-pin", html: icon("pin"), iconSize: [36, 36], iconAnchor: [18, 34] });
-    let pin = null;
-    map.placePin = (loc, zoom) => {
-      if (!pin) {
-        pin = L.marker(loc, { icon: pinIcon, draggable: true }).addTo(map);
-        pin.on("dragend", () => setLocation(o, pin.getLatLng()));
-      } else pin.setLatLng(loc);
-      if (zoom) map.setView(loc, zoom);
-    };
-    if (details.loc) map.placePin(details.loc);
-    map.on("click", (e) => setLocation(o, e.latlng));
-    mapInst = map;
-    setTimeout(() => map.invalidateSize(), 250);
-    // Pin from another city, or distance not yet worked out: recalculate.
-    if (details.loc && (details.km == null || details.kmFor !== state.city)) setLocation(o, details.loc, { fillAddress: false });
   }
 
   function useMyLocation(o) {
     if (!navigator.geolocation) { toast("Location isn't available on this device"); return; }
     updateDeliveryUI(o, "Finding you…");
     navigator.geolocation.getCurrentPosition(
-      (p) => setLocation(o, { lat: p.coords.latitude, lng: p.coords.longitude }, { zoom: 16 }),
-      () => { updateDeliveryUI(o); toast("Couldn't get your location. Search or tap the map instead."); },
+      (p) => setLocation(o, { lat: p.coords.latitude, lng: p.coords.longitude }),
+      () => { updateDeliveryUI(o); toast("Couldn't get your location. Please search the address instead."); },
       { enableHighAccuracy: true, timeout: 10000 }
     );
   }
 
   function lineText(line) {
     const item = findItem(line.id);
-    const opts = item.options.map((g, gi) => g.choices[line.picks[gi]].label).join(", ");
+    const opts = item.options.map((g, gi) => pickList(g, line.picks[gi]).map((ci) => g.choices[ci].label).join(" + ")).join(", ");
     return { item, opts, total: priceFor(item, line.picks) * line.qty };
   }
 
@@ -644,11 +706,15 @@
 
     const body = `
       ${items}
-      <div class="summary${m.needsAddress ? " summary--sub" : ""}"><span>Subtotal</span><span>${rupee(cartTotal())}</span></div>
-      ${m.needsAddress ? `
-        <div class="summary summary--sub"><span>Delivery</span><span data-delivery></span></div>
-        <div class="summary"><span>Total</span><span data-grand></span></div>` : ""}
-      <p class="fine">${m.needsAddress ? `Delivery is ${rupee(D.ratePerKm)} per km from our ${esc(state.city)} kitchen.` : `Pick-up location in ${esc(state.city)} is shared on confirmation.`} Prices are confirmed when we accept your order.${P.upiId ? ` Pay by UPI ${P.payAfter === "placed" ? "on your order page" : "once your order is confirmed"}.` : ""}</p>
+      <div class="summary summary--sub"><span>Item total</span><span>${rupee(cartTotal())}</span></div>
+      ${m.gift ? `<div class="summary summary--sub"><span>Add-ons</span><span data-addons-total>${rupee(addonsTotal())}</span></div>` : ""}
+      ${m.needsAddress ? `<div class="summary summary--sub"><span>Delivery charges</span><span data-delivery></span></div>` : ""}
+      <div class="summary"><span>Total</span><span data-grand>${rupee(grandTotal())}</span></div>
+      ${D.kitchens[state.city] && D.kitchens[state.city].address ? `
+        <div class="store-addr">${icon("pin")}<div><b>Store address · ${esc(state.city)}</b><span>${esc(D.kitchens[state.city].address)}</span></div></div>` : ""}
+      <p class="fine">${m.needsAddress
+        ? `Delivery charges are calculated after entering the address (${rupee(D.ratePerKm)}/km, within ${D.maxKm} km).`
+        : "Pick it up yourself, or arrange your own delivery (Porter, Rapido, etc.) from our store."} Prices are confirmed when we accept your order.${P.upiId ? ` Pay by UPI ${P.payAfter === "placed" ? "on your order page" : "once your order is confirmed"}.` : ""}</p>
       <form class="form" novalidate>
         <h3>Order details</h3>
         <div class="field"><label>City</label><div class="seg">${citySeg}</div></div>
@@ -657,20 +723,22 @@
         ${m.gift ? `<div class="field-row">${f("recipient", "Recipient's name", "text", "required")}${f("recipientPhone", "Recipient's phone", "tel", 'inputmode="tel" required')}</div>` : ""}
         ${m.needsAddress ? `
           <div class="field">
-            <label for="loc-q">Pin the delivery location</label>
+            <label>${m.gift ? "Recipient's location" : "Delivery location"}</label>
+            ${m.gift ? "" : `<button type="button" class="loc-gps loc-gps--big" data-loc-gps>${icon("pin")} Use my current location</button>`}
             <div class="loc-search">
-              <input id="loc-q" type="search" placeholder="Search area, street or landmark" autocomplete="off">
+              <input id="loc-q" type="search" placeholder="${m.gift ? "Search the recipient's area or landmark" : "Or search area, street or landmark"}" autocomplete="off">
               <button type="button" class="loc-btn" data-loc-search aria-label="Search">${icon("search")}</button>
             </div>
             <div class="loc-results hidden"></div>
-            <button type="button" class="loc-gps" data-loc-gps>${icon("pin")} Use my current location</button>
-            <div id="loc-map" class="map" aria-label="Map: tap to set the delivery location"></div>
+            ${m.gift ? `<button type="button" class="loc-gps" data-loc-gps>${icon("pin")} Use my current location</button>` : ""}
             <p class="loc-info"></p>
+            ${!details.loc && !details.locSkipped ? `<button type="button" class="link loc-skip" data-loc-skip>Can't find it? Skip and confirm delivery charge on chat</button>` : ""}
           </div>` +
           f("address", m.gift ? "Recipient's address" : "Delivery address", "textarea", 'autocomplete="street-address" required') +
           f("landmark", "Flat / landmark / pincode") : ""}
-        <div class="field-row">${f("date", m.needsAddress ? "Delivery date" : "Pick-up date", "date", `min="${minDate()}" required`)}${f("time", "Preferred time", "time")}</div>
-        ${m.gift ? f("message", "Gift note (we'll write it by hand)", "textarea", 'maxlength="200"') : ""}
+        ${f("date", m.needsAddress ? "Delivery date" : "Pick-up date", "date", `min="${minDate()}" required`)}
+        <div class="field"><label>${m.needsAddress ? "Delivery slot" : "Pick-up slot"}</label><div data-slots>${slotsHtml()}</div></div>
+        ${m.gift ? addonsHtml() : ""}
         ${f("note", "Anything else? (allergies, occasion…)", "textarea")}
         <p class="error hidden" data-error></p>
       </form>`;
@@ -679,10 +747,19 @@
 
     $(".form", o).addEventListener("input", (e) => {
       if (e.target.name) { details[e.target.name] = e.target.value; store.set("details", details); }
+      if (e.target.name === "date") $("[data-slots]", o).innerHTML = slotsHtml();
+      const at = e.target.dataset && e.target.dataset.addonText;
+      if (at) {
+        details.addonText[at] = e.target.value;
+        store.set("details", details);
+        const c = e.target.nextElementSibling;
+        if (c) c.textContent = `${e.target.value.length}/${e.target.maxLength} characters`;
+      }
     });
     if (m.needsAddress) {
       updateDeliveryUI(o);
-      initMap(o);
+      // Location from another city, or distance not worked out yet: recalculate.
+      if (details.loc && (details.km == null || details.kmFor !== state.city)) setLocation(o, details.loc, { fillAddress: false });
       $("#loc-q", o).addEventListener("keydown", (e) => {
         if (e.key === "Enter") { e.preventDefault(); searchPlaces(o, e.target.value); }
       });
@@ -690,6 +767,32 @@
     o.addEventListener("click", (e) => {
       if (e.target.closest("[data-loc-search]")) { searchPlaces(o, $("#loc-q", o).value); return; }
       if (e.target.closest("[data-loc-gps]")) { useMyLocation(o); return; }
+      if (e.target.closest("[data-loc-skip]")) {
+        details.locSkipped = true;
+        store.set("details", details);
+        e.target.closest("[data-loc-skip]").remove();
+        updateDeliveryUI(o);
+        return;
+      }
+      const slot = e.target.closest("[data-slot]");
+      if (slot) {
+        details.time = slot.dataset.slot;
+        store.set("details", details);
+        $$("[data-slot]", o).forEach((b) => b.setAttribute("aria-pressed", b === slot));
+        return;
+      }
+      const ad = e.target.closest("[data-ad]");
+      if (ad) {
+        const a = ADDONS.find((x) => x.id === ad.dataset.addon);
+        details.addons[a.id] = Math.max(0, Math.min(a.maxQty || 1, (details.addons[a.id] || 0) + +ad.dataset.ad));
+        store.set("details", details);
+        const box = $(".addons", o);
+        box.outerHTML = addonsHtml();
+        updateDeliveryUI(o);
+        const input = $(`[data-addon-text="${a.id}"]`, o);
+        if (input && +ad.dataset.ad > 0) input.focus();
+        return;
+      }
       const place = e.target.closest("[data-place]");
       if (place) {
         const [lat, lng] = place.dataset.place.split(",").map(Number);
@@ -736,17 +839,22 @@
       ...(orderId ? [`Order ID: ${orderId}`] : []),
       "",
       ...lines,
+      ...addonLines().map((a) => `+ ${a.name}${a.qty > 1 ? ` × ${a.qty}` : ""}${a.message ? ` ("${a.message}")` : ""} = ${rupee(a.total)}`),
       "",
-      `Subtotal: ${rupee(cartTotal())}`
+      `Item total: ${rupee(cartTotal())}`
     ];
+    if (addonLines().length) out.push(`Add-ons: ${rupee(addonsTotal())}`);
     const q = deliveryQuote();
-    if (m.needsAddress && q) {
-      const dist = `${q.km.toFixed(1)} km${details.kmSource === "approx" ? " (approx.)" : ""}`;
-      out.push(q.outside
-        ? `Delivery: ${dist}, outside delivery area, please confirm`
-        : `Delivery: ${dist} → ${q.billedKm} km × ${rupee(D.ratePerKm)} = ${rupee(q.charge)}`);
-      out.push(`Total: ${rupee(grandTotal())}`);
+    if (m.needsAddress) {
+      if (!q) out.push("Delivery: to be confirmed (location not pinned)");
+      else {
+        const dist = `${q.km.toFixed(1)} km${details.kmSource === "approx" ? " (approx.)" : ""}`;
+        out.push(q.outside
+          ? `Delivery: ${dist}, outside delivery area, please confirm`
+          : `Delivery: ${dist} → ${q.billedKm} km × ${rupee(D.ratePerKm)} = ${rupee(q.charge)}`);
+      }
     }
+    out.push(`Total: ${rupee(grandTotal())}`);
     out.push(
       "",
       `City: ${state.city}`,
@@ -757,8 +865,7 @@
     if (m.gift) out.push(`Recipient: ${details.recipient} (${details.recipientPhone})`);
     if (m.needsAddress) out.push(`Address: ${details.address}${details.landmark ? ", " + details.landmark : ""}`);
     if (m.needsAddress && details.loc) out.push(`Location: https://www.google.com/maps?q=${details.loc.lat},${details.loc.lng}`);
-    out.push(`${m.needsAddress ? "Delivery" : "Pick-up"} on: ${details.date}${details.time ? " at " + details.time : ""}`);
-    if (m.gift && details.message) out.push(`Gift note: "${details.message}"`);
+    out.push(`${m.needsAddress ? "Delivery" : "Pick-up"} on: ${fmtDate(details.date)}, ${slotLabel(details.time)}`);
     if (details.note) out.push(`Notes: ${details.note}`);
     if (orderId) out.push("", `Track order: ${trackUrl(orderId)}`);
     return out.join("\n");
@@ -773,12 +880,16 @@
     const m = S.modes[state.mode];
     const q = m.needsAddress ? deliveryQuote() : null;
     const payload = {
-      items: state.cart.map((l) => {
-        const { item, opts, total } = lineText(l);
-        return { name: item.name, options: opts, qty: l.qty, price: total };
-      }),
-      subtotal: cartTotal(),
-      delivery: q ? { km: +q.km.toFixed(1), charge: q.charge, outside: q.outside } : null,
+      items: [
+        ...state.cart.map((l) => {
+          const { item, opts, total } = lineText(l);
+          return { name: item.name, options: opts, qty: l.qty, price: total };
+        }),
+        // Gift add-ons travel as their own lines so the dashboard and order page list them.
+        ...addonLines().map((a) => ({ name: `Add-on: ${a.name}`, options: a.message ? `“${a.message}”` : "", qty: a.qty, price: a.total }))
+      ],
+      subtotal: cartTotal() + addonsTotal(),
+      delivery: q ? { km: +q.km.toFixed(1), charge: q.charge, outside: q.outside } : m.needsAddress ? { km: 0, charge: null, outside: false } : null,
       total: grandTotal(),
       city: state.city,
       mode: state.mode,
@@ -789,7 +900,7 @@
       loc: m.needsAddress ? details.loc || null : null,
       date: details.date,
       time: details.time,
-      giftNote: m.gift ? details.message : "",
+      giftNote: (addonLines().find((a) => a.id === "note") || {}).message || "",
       note: details.note
     };
     try {
@@ -860,15 +971,17 @@
     if (m.gift && !details.recipient.trim()) missing.push("recipient's name");
     if (m.gift && !details.recipientPhone.trim()) missing.push("recipient's phone");
     if (m.needsAddress && !details.address.trim()) missing.push("address");
-    // Only insist on a pin when the map actually loaded; otherwise the address is enough.
-    if (m.needsAddress && !details.loc && window.L) missing.push("your location on the map");
+    if (m.needsAddress && !details.loc && !details.locSkipped) missing.push("your location (use current location or search the address)");
     if (!missing.length && m.needsAddress && details.loc && !deliveryQuote()) {
       err.textContent = "Still calculating the delivery distance. Please try again in a second.";
       err.classList.remove("hidden");
       return;
     }
     if (!details.date) missing.push("date");
-    else if (details.date < minDate()) missing.push(`a date from ${minDate()} (we bake fresh to order)`);
+    else if (details.date < minDate()) missing.push(`a date from ${fmtDate(minDate())}`);
+    else if (!details.time || !allSlots().includes(details.time)) missing.push("a time slot");
+    else if (!slotOpen(details.date, details.time)) missing.push(`a later time slot (we need about ${(S.orderInfo && S.orderInfo.prepHours) || 2} hours to prepare)`);
+    addonLines().filter((a) => a.text && !a.message).forEach((a) => missing.push(`the text for your ${a.name.toLowerCase()}`));
     if (missing.length) {
       err.textContent = "Please add " + missing.join(", ") + ".";
       err.classList.remove("hidden");
@@ -934,7 +1047,7 @@
       ${d ? `<div class="summary summary--sub"><span>Delivery${d.km ? ` (${d.km} km)` : ""}</span><span>${d.charge == null ? "To be confirmed" : rupee(d.charge)}</span></div>` : ""}
       <div class="summary"><span>${o.finalTotal != null ? "Final total" : "Total"}</span><span>${rupee(orderTotal(o))}</span></div>
       <dl class="track-meta">
-        <div><dt>${pickup ? "Pick-up" : "Delivery"}</dt><dd>${esc(fmtDate(o.date))}${o.time ? " · " + esc(o.time) : ""} · ${esc(o.city)}</dd></div>
+        <div><dt>${pickup ? "Pick-up" : "Delivery"}</dt><dd>${esc(fmtDate(o.date))}${o.time ? " · " + esc(slotLabel(o.time)) : ""} · ${esc(o.city)}</dd></div>
         <div><dt>Name</dt><dd>${esc(o.customer.name)} · ${esc(o.customer.phone)}</dd></div>
         ${o.recipient ? `<div><dt>Gift for</dt><dd>${esc(o.recipient.name)} · ${esc(o.recipient.phone)}</dd></div>` : ""}
         ${o.address ? `<div><dt>Address</dt><dd>${esc(o.address)}${o.landmark ? ", " + esc(o.landmark) : ""}</dd></div>` : ""}
@@ -1180,7 +1293,7 @@
   }
 
   // Shared with the owner dashboard (js/admin.js).
-  window.SY = { $, $$, icon, esc, rupee, toast, store, statusInfo, orderDetailsHtml, fmtTime, fmtDate, orderTotal, trackUrl, hydrateIcons, STEPS, amountDue, paymentOf, canPay, upiActive };
+  window.SY = { $, $$, icon, esc, rupee, toast, store, statusInfo, orderDetailsHtml, fmtTime, fmtDate, orderTotal, trackUrl, hydrateIcons, STEPS, slotLabel, slotMinutes, amountDue, paymentOf, canPay, upiActive };
 
   /* ---------- Boot ---------- */
   document.addEventListener("DOMContentLoaded", () => {

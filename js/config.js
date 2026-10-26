@@ -20,24 +20,47 @@ window.SITE = {
   email: "",
 
   cities: ["Chennai", "Bengaluru"],
-  hours: "Baked fresh to order · Please order at least 1 day in advance",
-  leadDays: 1,
+  hours: "Prep time 2 hrs · Dispatch slots 5 PM – 9 PM",
+  leadDays: 0, // 0 = same-day orders allowed (slots within the prep time are hidden)
+
+  // Shown in every product's details.
+  orderInfo: {
+    prepHours: 2,
+    firstDispatch: "5 PM",
+    urgent: "Need it urgently? If your order is time-sensitive, please DM us on Instagram or call us directly. We'll do our best to accommodate your request, subject to availability."
+  },
+
+  // Pick-up / delivery time slots offered at checkout.
+  slots: { start: "17:00", end: "21:00", minutes: 30 },
+
+  /*
+   * Gift add-ons, offered when the customer picks "Send as a Gift".
+   *   text: the customer types a message (max = character limit)
+   *   maxQty: more than 1 shows a quantity stepper
+   */
+  giftAddons: [
+    { id: "note", name: "Gift Note", price: 25, desc: "Add a heartfelt note to make your gift even more special", text: { max: 200, placeholder: "Write your note" } },
+    { id: "choco", name: "Chocolate Message", price: 99, desc: "Add a personalised chocolate message to make your Cookie Pie extra special", text: { max: 20, placeholder: "e.g. Happy Birthday Ayesha" } },
+    { id: "candle", name: "Candle", price: 30, maxQty: 10 },
+    { id: "rose", name: "Rose (1 pc)", price: 50, maxQty: 12 },
+    { id: "bouquet", name: "Rose Bouquet", price: 499 }
+  ],
 
   /*
    * Distance-based delivery charge.
    * Charge = ratePerKm × distance (rounded up to the next km), never below minCharge.
-   * Kitchens: the pick-up / dispatch point in each city. The coordinates below are
-   * PLACEHOLDERS (city centre). In Google Maps, long-press the kitchen,
-   * copy the "lat, lng" numbers and paste them here.
+   * Kitchens: the pick-up / dispatch point in each city, shown as the store address
+   * at checkout. The coordinates and addresses below are PLACEHOLDERS. In Google Maps,
+   * long-press the kitchen, copy the "lat, lng" numbers and paste them here.
    */
   delivery: {
     ratePerKm: 20,
     minCharge: 0,
-    maxKm: 25,
+    maxKm: 30,
     roadFactor: 1.3, // used to estimate road distance when the routing service is unreachable
     kitchens: {
-      Chennai: { lat: 13.0827, lng: 80.2707 },
-      Bengaluru: { lat: 12.9716, lng: 77.5946 }
+      Chennai: { lat: 13.0827, lng: 80.2707, address: "Store address in Chennai (to be added)" },
+      Bengaluru: { lat: 12.9716, lng: 77.5946, address: "Store address in Bengaluru (to be added)" }
     }
   },
 
@@ -69,7 +92,7 @@ window.SITE = {
     {
       eyebrow: "The one that started it all",
       title: "OG Cookie Pie",
-      text: "Gooey, molten, baked in a tin. 200g · 500g · 1kg",
+      text: "Couple · Family · Celebration. Mix your favourite flavours",
       image: "assets/img/og-cookie-pie.jpg",
       target: "og-cookie-pie"
     },
@@ -113,15 +136,16 @@ window.SITE = {
       description:
         "Our signature. A giant gooey cookie baked in a gold tin with a molten chocolate centre and a sprinkle of sea salt. The kind of dessert you order once and crave forever.",
       options: [
+        // "flavours" = how many flavours the customer can mix for that size.
         { name: "Size", choices: [
-          { label: "200g", price: 349 },
-          { label: "500g", price: 749 },
-          { label: "1kg", price: 1399 }
+          { label: "Couple (200g)", price: 349, flavours: 2 },
+          { label: "Family (500g)", price: 749, flavours: 3 },
+          { label: "Celebration (1kg)", price: 1399, flavours: 3 }
         ] },
-        { name: "Flavour", choices: [
-          { label: "Milk Chocolate", add: 0 },
-          { label: "Dark Chocolate", add: 0 },
-          { label: "Nutella", add: 50 }
+        { name: "Flavours", multi: true, choices: [
+          { label: "Milk Chocolate" },
+          { label: "Dark Chocolate" },
+          { label: "Nutella" }
         ] }
       ]
     },

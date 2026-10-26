@@ -3,7 +3,7 @@
   "use strict";
 
   const S = window.SITE;
-  const { $, $$, icon, esc, rupee, toast, store, statusInfo, orderDetailsHtml, fmtTime, fmtDate, orderTotal, trackUrl, amountDue, paymentOf, canPay, upiActive } = window.SY;
+  const { $, $$, icon, esc, rupee, toast, store, statusInfo, orderDetailsHtml, fmtTime, fmtDate, orderTotal, trackUrl, amountDue, paymentOf, canPay, upiActive, slotLabel, slotMinutes } = window.SY;
   const P = S.payment || {};
   const PAY_LABEL = { unpaid: "Unpaid", submitted: "Payment to verify", paid: "Paid" };
 
@@ -87,7 +87,10 @@
 
   async function update(id, changes, okMsg) {
     try {
-      const { order } = await api("POST", { id, ...changes });
+      const { order, calendar } = await api("POST", { id, ...changes });
+      if (calendar === "added") okMsg += " · Added to Google Calendar";
+      if (calendar === "removed") okMsg += " · Removed from Google Calendar";
+      if (calendar === "failed") okMsg += " · Couldn't update Google Calendar";
       orders = orders.map((o) => (o.id === id ? order : o));
       knownNew = orders.filter((o) => o.status === "placed").length;
       render();
@@ -122,7 +125,7 @@
   function updateMessage(o) {
     const first = o.customer.name.split(" ")[0];
     const link = trackUrl(o.id);
-    const when = `${fmtDate(o.date)}${o.time ? " at " + o.time : ""}`;
+    const when = `${fmtDate(o.date)}${o.time ? ", " + slotLabel(o.time) : ""}`;
     const note = (o.ownerNote ? `\n\n${o.ownerNote}` : "") + payLine(o);
     const pickup = o.mode === "pickup";
     switch (o.status) {
@@ -181,6 +184,37 @@
       ${pay.status === "submitted" ? `<p class="fine ad-pay__hint">Check your UPI / bank app for ${due} with ref ${esc(pay.ref)}, then tap “Mark as paid”.</p>` : ""}`;
   }
 
+  // One-tap "Add to Google Calendar" (prefilled event). Zeen's default notification gives the alert.
+  function calendarLink(o) {
+    const d = o.date.replace(/-/g, "");
+    let dates = `${d}/${d}`;
+    if (/^\d{2}:\d{2}$/.test(o.time || "")) {
+      const [h, m] = o.time.split(":").map(Number);
+      const end = h * 60 + m + slotMinutes();
+      const hhmm = (t) => `${String(Math.floor(t / 60)).padStart(2, "0")}${String(t % 60).padStart(2, "0")}00`;
+      dates = `${d}T${hhmm(h * 60 + m)}/${d}T${hhmm(end)}`;
+    }
+    const how = S.modes[o.mode] ? S.modes[o.mode].label : o.mode;
+    const details = [
+      ...o.items.map((i) => `• ${i.qty} × ${i.name}${i.options ? ` (${i.options})` : ""}`),
+      "",
+      `Total: ${rupee(orderTotal(o))}`,
+      `Customer: ${o.customer.name} · ${o.customer.phone}`,
+      o.address ? `Address: ${o.address}${o.landmark ? ", " + o.landmark : ""}` : "",
+      o.loc ? `Map: https://www.google.com/maps?q=${o.loc.lat},${o.loc.lng}` : "",
+      o.note ? `Notes: ${o.note}` : "",
+      `Order: ${trackUrl(o.id)}`
+    ].filter(Boolean).join("\n");
+    const q = new URLSearchParams({ action: "TEMPLATE", text: `🍪 ${how}: ${o.customer.name} (${o.id})`, dates, ctz: "Asia/Kolkata", details, location: o.address || "" });
+    return `https://calendar.google.com/calendar/render?${q}`;
+  }
+
+  function calendarHtml(o) {
+    if (!o.date || ["placed", "cancelled", "completed"].includes(o.status)) return "";
+    if (o.calendarEventId) return `<span class="chip-btn chip-btn--done">${icon("check")} In your calendar</span>`;
+    return `<a class="chip-btn" href="${esc(calendarLink(o))}" target="_blank" rel="noopener">${icon("clock")} Add to Google Calendar</a>`;
+  }
+
   function cardHtml(o) {
     const info = statusInfo(o);
     const next = nextStep(o);
@@ -195,7 +229,7 @@
           <span class="status-pill status-pill--${esc(o.status)}">${icon(info.icon)}${esc(info.label)}</span>
         </header>
         <p class="ad-who"><b>${esc(o.customer.name)}</b> · <a href="tel:${esc(o.customer.phone.replace(/\s/g, ""))}">${esc(o.customer.phone)}</a></p>
-        <p class="ad-when">${esc(mode)} · ${esc(o.city)} · <b>${esc(fmtDate(o.date))}${o.time ? " " + esc(o.time) : ""}</b></p>
+        <p class="ad-when">${esc(mode)} · ${esc(o.city)} · <b>${esc(fmtDate(o.date))}${o.time ? " · " + esc(slotLabel(o.time)) : ""}</b></p>
         <p class="ad-total">${itemCount(o)} item${itemCount(o) === 1 ? "" : "s"} · <b>${rupee(orderTotal(o))}</b> <small>placed ${fmtTime(o.createdAt)}</small></p>
         ${payHtml(o)}
         <details class="ad-details">
@@ -215,6 +249,7 @@
             ${wa ? `<a class="chip-btn chip-btn--wa" href="https://wa.me/${wa}?text=${encodeURIComponent(updateMessage(o))}" target="_blank" rel="noopener">${icon("whatsapp")} WhatsApp</a>` : ""}
             <button class="chip-btn" type="button" data-copy>${icon("copy")} Copy message</button>
             <a class="chip-btn" href="${esc(trackUrl(o.id))}" target="_blank" rel="noopener">${icon("external")} Order page</a>
+            ${calendarHtml(o)}
           </div>
         </div>
 
