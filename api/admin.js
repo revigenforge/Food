@@ -1,6 +1,6 @@
 // Owner dashboard API (password in the ADMIN_PASSWORD environment variable).
 // GET  /api/admin  → latest orders
-// POST /api/admin  → { id, status?, ownerNote?, finalTotal? } update an order
+// POST /api/admin  → { id, status?, paymentStatus?, ownerNote?, finalTotal? } update an order
 const { STATUSES, HttpError, getOrder, saveOrder, listOrders, allow, isAdmin, send, handle } = require("./_lib/store");
 
 module.exports = (req, res) => handle(res, async () => {
@@ -19,6 +19,10 @@ module.exports = (req, res) => handle(res, async () => {
       if (!STATUSES.includes(b.status)) throw new HttpError(400, "Unknown status.");
       order.status = b.status;
       order.history.push({ status: b.status, at: now });
+    }
+    if (["unpaid", "submitted", "paid"].includes(b.paymentStatus)) {
+      const payment = order.payment || { status: "unpaid", ref: "" };
+      order.payment = { ...payment, status: b.paymentStatus, ...(b.paymentStatus === "paid" ? { paidAt: now } : {}) };
     }
     if (typeof b.ownerNote === "string") order.ownerNote = b.ownerNote.trim().slice(0, 500);
     if (b.finalTotal !== undefined) order.finalTotal = b.finalTotal === null || b.finalTotal === "" ? null : Math.max(0, Math.round(+b.finalTotal) || 0);

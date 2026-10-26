@@ -3,7 +3,9 @@
   "use strict";
 
   const S = window.SITE;
-  const { $, $$, icon, esc, rupee, toast, store, statusInfo, orderDetailsHtml, fmtTime, fmtDate, orderTotal, trackUrl } = window.SY;
+  const { $, $$, icon, esc, rupee, toast, store, statusInfo, orderDetailsHtml, fmtTime, fmtDate, orderTotal, trackUrl, amountDue, paymentOf, canPay, upiActive } = window.SY;
+  const P = S.payment || {};
+  const PAY_LABEL = { unpaid: "Unpaid", submitted: "Payment to verify", paid: "Paid" };
 
   const NEXT = {
     placed: ["confirmed", "Confirm order"],
@@ -14,6 +16,7 @@
   const FILTERS = [
     ["active", "Active", (o) => !["completed", "cancelled"].includes(o.status)],
     ["placed", "New", (o) => o.status === "placed"],
+    ["verify", "To verify", (o) => paymentOf(o).status === "submitted"],
     ["all", "All", () => true],
     ["completed", "Done", (o) => o.status === "completed"],
     ["cancelled", "Cancelled", (o) => o.status === "cancelled"]
@@ -107,11 +110,20 @@
     return d;
   }
 
+  // Payment line for the customer update: ask for payment, or thank them for it.
+  function payLine(o) {
+    if (!P.upiId || o.status === "cancelled" || o.status === "completed") return "";
+    const pay = paymentOf(o);
+    if (pay.status === "paid") return `\nPayment of ${rupee(amountDue(o))} received, thank you!`;
+    if (pay.status === "submitted" || !canPay(o)) return "";
+    return `\nPlease pay ${rupee(amountDue(o))} by UPI on your order page (link below).`;
+  }
+
   function updateMessage(o) {
     const first = o.customer.name.split(" ")[0];
     const link = trackUrl(o.id);
     const when = `${fmtDate(o.date)}${o.time ? " at " + o.time : ""}`;
-    const note = o.ownerNote ? `\n\n${o.ownerNote}` : "";
+    const note = (o.ownerNote ? `\n\n${o.ownerNote}` : "") + payLine(o);
     const pickup = o.mode === "pickup";
     switch (o.status) {
       case "placed":
@@ -153,6 +165,22 @@
 
   const itemCount = (o) => o.items.reduce((n, i) => n + i.qty, 0);
 
+  function payHtml(o) {
+    if (!P.upiId && !P.qrImage) return "";
+    if (o.status === "cancelled" && paymentOf(o).status === "unpaid") return "";
+    const pay = paymentOf(o);
+    const due = rupee(amountDue(o));
+    return `
+      <div class="ad-pay ad-pay--${pay.status}">
+        <span class="status-pill status-pill--pay-${pay.status}">${icon(pay.status === "paid" ? "check" : "upi")}${PAY_LABEL[pay.status] || pay.status}</span>
+        <span class="ad-pay__info">${due}${pay.ref ? ` · Ref <b>${esc(pay.ref)}</b>` : ""}</span>
+        ${pay.status === "paid"
+          ? `<button class="link" type="button" data-pay="unpaid">Undo</button>`
+          : `<button class="chip-btn" type="button" data-pay="paid">${icon("check")} Mark as paid</button>`}
+      </div>
+      ${pay.status === "submitted" ? `<p class="fine ad-pay__hint">Check your UPI / bank app for ${due} with ref ${esc(pay.ref)}, then tap “Mark as paid”.</p>` : ""}`;
+  }
+
   function cardHtml(o) {
     const info = statusInfo(o);
     const next = nextStep(o);
@@ -169,6 +197,7 @@
         <p class="ad-who"><b>${esc(o.customer.name)}</b> · <a href="tel:${esc(o.customer.phone.replace(/\s/g, ""))}">${esc(o.customer.phone)}</a></p>
         <p class="ad-when">${esc(mode)} · ${esc(o.city)} · <b>${esc(fmtDate(o.date))}${o.time ? " " + esc(o.time) : ""}</b></p>
         <p class="ad-total">${itemCount(o)} item${itemCount(o) === 1 ? "" : "s"} · <b>${rupee(orderTotal(o))}</b> <small>placed ${fmtTime(o.createdAt)}</small></p>
+        ${payHtml(o)}
         <details class="ad-details">
           <summary>Order details</summary>
           ${orderDetailsHtml(o)}
@@ -229,6 +258,11 @@
       return;
     }
     if (e.target.closest("[data-copy]")) { copy(updateMessage(o)); return; }
+    const pay = e.target.closest("[data-pay]");
+    if (pay) {
+      update(id, { paymentStatus: pay.dataset.pay }, pay.dataset.pay === "paid" ? "Marked as paid. Send the customer a thank-you below" : "Payment marked unpaid");
+      return;
+    }
     if (e.target.closest("[data-save]")) {
       const final = $("[data-final]", card).value.trim();
       update(id, { finalTotal: final === "" ? null : +final, ownerNote: $("[data-note]", card).value }, "Saved");

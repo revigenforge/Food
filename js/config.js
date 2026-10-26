@@ -41,6 +41,24 @@ window.SITE = {
     }
   },
 
+  /*
+   * UPI payments (needs order tracking on Vercel).
+   * upiId:      Zeen's UPI ID, e.g. "sweetlyyours@okhdfcbank". A business UPI ID works best
+   *             with Google Pay. While this has no "@", payments show as "not active yet".
+   * qrImage:    optional path to Zeen's own UPI QR scanner image (e.g. "assets/img/upi-qr.png").
+   *             Leave empty to generate a QR code with the exact amount filled in.
+   * payAfter:   "confirmed" = customer pays once Zeen confirms (recommended),
+   *             "placed"    = customer can pay right after placing the order.
+   * advancePercent: 100 = full amount, 50 = half as advance, etc.
+   */
+  payment: {
+    upiId: "REPLACE-WITH-UPI-ID",
+    payeeName: "Sweetly Yours",
+    qrImage: "",
+    payAfter: "confirmed",
+    advancePercent: 100
+  },
+
   modes: {
     pickup: { label: "Self Pick-up", icon: "bag", needsAddress: false },
     delivery: { label: "Home Delivery", icon: "truck", needsAddress: true },

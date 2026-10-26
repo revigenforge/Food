@@ -53,6 +53,16 @@ The cart and the customer's details are saved in the browser (localStorage), so 
 2. **Settings → Environment Variables** → add `ADMIN_PASSWORD` with a strong password for the dashboard.
 3. **Redeploy** (Deployments → ⋯ → Redeploy) so the functions pick up the new variables.
 
+### UPI payments
+
+Once Zeen confirms an order, the customer's order page shows **Pay ₹X**: a button that opens GPay / PhonePe / Paytm with the amount filled in, a UPI QR code, and the UPI ID.
+After paying, the customer enters the UPI transaction ID / UTR. The order shows **Payment to verify** on the dashboard (and under the **To verify** tab).
+Zeen checks his UPI or bank app and taps **Mark as paid**, and the customer's page shows **Paid**. The WhatsApp updates include a payment request or a thank-you.
+
+Set it up under `payment` in `js/config.js`: `upiId` (a business UPI ID works best with Google Pay), the payee name,
+an optional `qrImage` (Zeen's own QR scanner image), when customers can pay (`payAfter`) and `advancePercent`.
+Until `upiId` is a real UPI ID, the order page says online payment isn't active yet.
+
 Without these, or on a static-only host like GitHub Pages, checkout falls back to plain ordering by DM (no tracking link).
 
 ## Editing content

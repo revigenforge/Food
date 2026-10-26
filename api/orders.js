@@ -1,5 +1,6 @@
-// POST /api/orders       → create an order from the checkout (public)
-// GET  /api/orders?id=…  → order status page data (public, by unguessable id)
+// POST /api/orders                                 → create an order from the checkout (public)
+// POST /api/orders { action: "payment", id, ref }  → customer submits their UPI transaction ID
+// GET  /api/orders?id=…                            → order status page data (public, by unguessable id)
 const { HttpError, newId, getOrder, saveOrder, allow, send, handle } = require("./_lib/store");
 
 const str = (v, max = 200) => String(v == null ? "" : v).trim().slice(0, max);
@@ -47,6 +48,23 @@ function publicView(o) {
   };
 }
 
+const PAYABLE = ["placed", "confirmed", "baking", "ready", "completed"];
+
+async function submitPayment(res, body) {
+  const order = await getOrder(str(body.id, 20).toUpperCase());
+  if (!order) throw new HttpError(404, "We couldn't find that order.");
+  const ref = str(body.ref, 40).replace(/\s+/g, "");
+  if (!/^[A-Za-z0-9-]{6,35}$/.test(ref)) throw new HttpError(400, "Please enter the UPI transaction ID / UTR from your payment app.");
+  if (!PAYABLE.includes(order.status)) throw new HttpError(400, "This order can't be paid right now.");
+  const payment = order.payment || { status: "unpaid", ref: "" };
+  if (payment.status === "paid") throw new HttpError(400, "This order is already marked as paid.");
+  const now = Date.now();
+  order.payment = { ...payment, status: "submitted", ref, submittedAt: now };
+  order.updatedAt = now;
+  await saveOrder(order, false);
+  return send(res, 200, publicView(order));
+}
+
 module.exports = (req, res) => handle(res, async () => {
   if (req.method === "GET") {
     const order = await getOrder(str(req.query.id, 20).toUpperCase());
@@ -57,6 +75,7 @@ module.exports = (req, res) => handle(res, async () => {
     const ip = str((req.headers["x-forwarded-for"] || "").split(",")[0], 60) || "unknown";
     if (!(await allow(`order:${ip}`, 10, 600))) throw new HttpError(429, "Too many orders from this device. Please message us directly.");
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
+    if (body.action === "payment") return submitPayment(res, body);
     const now = Date.now();
     const order = {
       id: newId(),
@@ -66,7 +85,8 @@ module.exports = (req, res) => handle(res, async () => {
       updatedAt: now,
       history: [{ status: "placed", at: now }],
       ownerNote: "",
-      finalTotal: null
+      finalTotal: null,
+      payment: { status: "unpaid", ref: "" }
     };
     await saveOrder(order, true);
     return send(res, 201, { id: order.id });

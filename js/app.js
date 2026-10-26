@@ -34,6 +34,7 @@
     refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
     copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
     logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+    upi: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M7 15h3"/>',
     external: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
     heart: '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>'
   };
@@ -647,7 +648,7 @@
       ${m.needsAddress ? `
         <div class="summary summary--sub"><span>Delivery</span><span data-delivery></span></div>
         <div class="summary"><span>Total</span><span data-grand></span></div>` : ""}
-      <p class="fine">${m.needsAddress ? `Delivery is ${rupee(D.ratePerKm)} per km from our ${esc(state.city)} kitchen.` : `Pick-up location in ${esc(state.city)} is shared on confirmation.`} Prices are confirmed when we accept your order.</p>
+      <p class="fine">${m.needsAddress ? `Delivery is ${rupee(D.ratePerKm)} per km from our ${esc(state.city)} kitchen.` : `Pick-up location in ${esc(state.city)} is shared on confirmation.`} Prices are confirmed when we accept your order.${P.upiId ? ` Pay by UPI ${P.payAfter === "placed" ? "on your order page" : "once your order is confirmed"}.` : ""}</p>
       <form class="form" novalidate>
         <h3>Order details</h3>
         <div class="field"><label>City</label><div class="seg">${citySeg}</div></div>
@@ -821,7 +822,7 @@
         <h3>${orderId ? "Almost done!" : "One last step"}</h3>
         ${orderId ? `<p class="sent__id">Order ID <b>${esc(orderId)}</b></p>` : ""}
         <p class="fine">Send your order to us on ${how} and Zeen will confirm it.
-          ${orderId ? "Your order page updates as soon as it's confirmed, and again when it's baking and on its way." : ""}</p>
+          ${orderId ? `Your order page updates as soon as it's confirmed${P.upiId ? ", and that's where you'll pay by UPI" : ""}.` : ""}</p>
         ${orderId ? `<a class="sent__track" href="${esc(trackUrl(orderId))}">${icon("receipt")} View order status</a>` : ""}
       </div>`;
     const foot = S.whatsapp
@@ -968,7 +969,114 @@
     root.addEventListener("click", (e) => {
       if (e.target.closest("[data-notify]")) enableNotifications(root);
       if (e.target.closest("[data-refresh]")) { load(); toast("Updated"); }
+      const c = e.target.closest("[data-copy-text]");
+      if (c) navigator.clipboard.writeText(c.dataset.copyText).then(() => toast("UPI ID copied"), () => prompt("UPI ID:", c.dataset.copyText));
     });
+    root.addEventListener("submit", async (e) => {
+      const form = e.target.closest("[data-pay-form]");
+      if (!form) return;
+      e.preventDefault();
+      const err = $("[data-pay-error]", form);
+      const btn = $("button[type=submit]", form);
+      btn.disabled = true;
+      try {
+        const res = await fetch("api/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "payment", id, ref: form.ref.value })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Couldn't submit. Please try again.");
+        last = data;
+        renderOrder(root, data);
+        toast("Thanks! Zeen will verify your payment shortly");
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.classList.remove("hidden");
+        btn.disabled = false;
+      }
+    });
+  }
+
+  /* ---------- UPI payment ---------- */
+  const P = S.payment || {};
+  const upiActive = () => /^[\w.-]+@[\w.-]+$/.test(P.upiId || "");
+  const amountDue = (o) => Math.ceil((orderTotal(o) * (P.advancePercent || 100)) / 100);
+  const paymentOf = (o) => o.payment || { status: "unpaid", ref: "" };
+  function canPay(o) {
+    if (o.status === "cancelled") return false;
+    return P.payAfter === "placed" || o.status !== "placed";
+  }
+  function upiLink(o) {
+    const q = new URLSearchParams({ pa: P.upiId, pn: P.payeeName || S.name, am: amountDue(o).toFixed(2), cu: "INR", tn: `${S.name} ${o.id}` });
+    return "upi://pay?" + q.toString().replace(/\+/g, "%20").replace(/%40/g, "@");
+  }
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const el = document.createElement("script");
+      el.src = src;
+      el.onload = resolve;
+      el.onerror = reject;
+      document.head.appendChild(el);
+    });
+  }
+
+  function paymentHtml(o) {
+    if (!P.upiId && !P.qrImage) return "";
+    const pay = paymentOf(o);
+    const amt = amountDue(o);
+    const partial = (P.advancePercent || 100) < 100;
+    const label = partial ? `${rupee(amt)} advance <small>(${P.advancePercent}% of ${rupee(orderTotal(o))})</small>` : rupee(amt);
+    if (o.status === "cancelled") return "";
+    if (pay.status === "paid") {
+      return `<section class="pay pay--paid"><div class="pay__head">${icon("check")}<div><h2>Paid</h2><p>${label} received. Thank you!</p></div></div></section>`;
+    }
+    const refForm = (cta) => `
+      <form class="pay__form" data-pay-form>
+        <label for="pay-ref">${cta}</label>
+        <div class="loc-search">
+          <input id="pay-ref" name="ref" inputmode="text" autocomplete="off" placeholder="UPI transaction ID / UTR" value="${esc(pay.ref || "")}" required>
+          <button class="btn" type="submit" style="flex:none">Submit</button>
+        </div>
+        <p class="error hidden" data-pay-error></p>
+      </form>`;
+    if (pay.status === "submitted") {
+      return `<section class="pay pay--submitted">
+        <div class="pay__head">${icon("clock")}<div><h2>Payment submitted</h2><p>${label} · Ref <b>${esc(pay.ref)}</b><br>Zeen will verify it shortly.</p></div></div>
+        <details class="pay__more"><summary>Entered the wrong ID?</summary>${refForm("Correct transaction ID")}</details>
+      </section>`;
+    }
+    if (!canPay(o)) {
+      return `<section class="pay pay--wait"><div class="pay__head">${icon("upi")}<div><h2>Pay by UPI</h2><p>You can pay ${label} here as soon as Zeen confirms your order.</p></div></div></section>`;
+    }
+    if (!upiActive() && !P.qrImage) {
+      return `<section class="pay pay--wait"><div class="pay__head">${icon("upi")}<div><h2>Pay ${label}</h2><p>Online UPI payment isn't active yet. Zeen will share payment details on chat.</p></div></div></section>`;
+    }
+    const mobile = matchMedia("(pointer: coarse)").matches;
+    const qr = P.qrImage
+      ? `<img class="pay__qr-img" src="${esc(P.qrImage)}" alt="UPI QR code"><p class="fine">Scan, enter <b>${rupee(amt)}</b> and add <b>${esc(o.id)}</b> in the note.</p>`
+      : `<div class="pay__qr" data-qr></div><p class="fine">Scan with any UPI app. The amount is filled in.</p>`;
+    return `
+      <section class="pay">
+        <div class="pay__head">${icon("upi")}<div><h2>Pay ${label}</h2><p>Pay by UPI, then enter the transaction ID below so Zeen can verify it.</p></div></div>
+        ${upiActive() ? `<a class="btn btn--upi" href="${esc(upiLink(o))}">${icon("upi")} Pay with GPay / PhonePe / Paytm</a>` : ""}
+        ${mobile && upiActive() ? `<details class="pay__more"><summary>Show QR code</summary>${qr}</details>` : `<div class="pay__qr-wrap">${qr}</div>`}
+        ${upiActive() ? `<div class="pay__id"><span>UPI ID <b>${esc(P.upiId)}</b></span><button class="chip-btn" type="button" data-copy-text="${esc(P.upiId)}">${icon("copy")} Copy</button></div>` : ""}
+        ${refForm("Paid? Enter the UPI transaction ID / UTR")}
+      </section>`;
+  }
+
+  async function drawQr(root, o) {
+    const el = $("[data-qr]", root);
+    if (!el || !upiActive()) return;
+    try {
+      if (!window.QRCode) await loadScript("https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js");
+      el.innerHTML = "";
+      new window.QRCode(el, { text: upiLink(o), width: 200, height: 200, colorDark: "#3f2018", colorLight: "#ffffff" });
+    } catch (e) {
+      el.innerHTML = `<p class="fine">QR code couldn't load. Use the UPI ID below.</p>`;
+    }
   }
 
   function renderOrder(root, o) {
@@ -994,6 +1102,7 @@
         <p>${esc(info.text)}</p>
         ${o.ownerNote ? `<blockquote class="owner-note"><b>A note from Zeen</b>${esc(o.ownerNote)}</blockquote>` : ""}
       </section>
+      ${paymentHtml(o)}
       ${steps}
       <div class="track-actions">
         ${canNotify ? `<button class="chip-btn" type="button" data-notify>${icon("bell")} Notify me on this device</button>` : ""}
@@ -1007,6 +1116,7 @@
       <div class="track-foot">${contact}<a class="btn btn--light" href="menu.html">Order something else</a></div>
       <p class="fine" style="text-align:center;margin-top:14px">This page updates automatically. Bookmark it to check back anytime.</p>`;
     document.title = `${info.label} · Order ${o.id} · ${S.name}`;
+    drawQr(root, o);
   }
 
   function renderError(root, msg) {
@@ -1070,7 +1180,7 @@
   }
 
   // Shared with the owner dashboard (js/admin.js).
-  window.SY = { $, $$, icon, esc, rupee, toast, store, statusInfo, orderDetailsHtml, fmtTime, fmtDate, orderTotal, trackUrl, hydrateIcons, STEPS };
+  window.SY = { $, $$, icon, esc, rupee, toast, store, statusInfo, orderDetailsHtml, fmtTime, fmtDate, orderTotal, trackUrl, hydrateIcons, STEPS, amountDue, paymentOf, canPay, upiActive };
 
   /* ---------- Boot ---------- */
   document.addEventListener("DOMContentLoaded", () => {
