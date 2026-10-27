@@ -280,6 +280,7 @@
     renderSlider();
     renderCards();
     renderCartCount();
+    addMenuSchema();
 
     $("[data-open-cart]").addEventListener("click", openCart);
     $(".cart-bar").addEventListener("click", openCart);
@@ -297,6 +298,36 @@
     tabs.innerHTML = [{ id: "all", name: "All" }, ...cats]
       .map((c) => `<button class="tab" role="tab" data-cat="${c.id}" aria-selected="${c.id === view.cat}">${esc(c.name)}</button>`)
       .join("");
+  }
+
+  // Menu in schema.org format so search engines can show items and prices.
+  function addMenuSchema() {
+    const abs = (src) => new URL(src, location.href).href;
+    const data = {
+      "@context": "https://schema.org",
+      "@type": "Menu",
+      name: `${S.name} ${S.byline} menu`,
+      hasMenuSection: S.categories.map((c) => ({
+        "@type": "MenuSection",
+        name: c.name,
+        hasMenuItem: S.items.filter((i) => i.category === c.id).map((i) => {
+          const [lo, hi] = priceRange(i);
+          return {
+            "@type": "MenuItem",
+            name: i.name,
+            description: i.description,
+            image: abs(imageOf(i)),
+            offers: lo === hi
+              ? { "@type": "Offer", price: lo, priceCurrency: "INR" }
+              : { "@type": "AggregateOffer", lowPrice: lo, highPrice: hi, priceCurrency: "INR" }
+          };
+        })
+      })).filter((sec) => sec.hasMenuItem.length)
+    };
+    const el = document.createElement("script");
+    el.type = "application/ld+json";
+    el.textContent = JSON.stringify(data);
+    document.head.appendChild(el);
   }
 
   function renderModeChip() {
