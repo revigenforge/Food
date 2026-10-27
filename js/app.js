@@ -90,6 +90,33 @@
   const PLACEHOLDER_IMG = "assets/img/placeholder.jpg";
   const imagesOf = (item) => (item.images && item.images.length ? item.images : item.image ? [item.image] : [PLACEHOLDER_IMG]);
   const imageOf = (item) => imagesOf(item)[0];
+  // Swipeable photos (scroll-snap) with dots, plus arrows for mouse users.
+  function galleryHtml(item, cls, attrs = "") {
+    const imgs = imagesOf(item);
+    if (imgs.length < 2) return `<img class="${cls}" src="${esc(imgs[0])}" alt="${esc(item.name)}" loading="lazy" ${attrs}>`;
+    return `
+      <div class="swipe" data-swipe>
+        <div class="swipe__track">${imgs.map((src, i) => `<img class="${cls}" src="${esc(src)}" alt="${esc(item.name)} photo ${i + 1}" loading="lazy" ${attrs}>`).join("")}</div>
+        <button type="button" class="swipe__arrow swipe__arrow--prev" data-swipe-go="-1" aria-label="Previous photo">${icon("left")}</button>
+        <button type="button" class="swipe__arrow swipe__arrow--next" data-swipe-go="1" aria-label="Next photo">${icon("right")}</button>
+        <div class="swipe__dots">${imgs.map((_, i) => `<span class="${i ? "" : "on"}"></span>`).join("")}</div>
+      </div>`;
+  }
+  document.addEventListener("scroll", (e) => {
+    const track = e.target.classList && e.target.classList.contains("swipe__track") ? e.target : null;
+    if (!track) return;
+    const i = Math.round(track.scrollLeft / track.clientWidth);
+    $$(".swipe__dots span", track.parentNode).forEach((d, j) => d.classList.toggle("on", i === j));
+  }, true);
+  document.addEventListener("click", (e) => {
+    const go = e.target.closest("[data-swipe-go]");
+    if (!go) return;
+    e.stopPropagation();
+    const track = $(".swipe__track", go.closest("[data-swipe]"));
+    const n = track.children.length;
+    const i = (Math.round(track.scrollLeft / track.clientWidth) + +go.dataset.swipeGo + n) % n;
+    track.scrollTo({ left: i * track.clientWidth, behavior: "smooth" });
+  }, true);
   const inCity = (x, city = state.city) => !x.cities || x.cities.includes(city);
 
   // Multi-select groups (e.g. "mix up to 3 flavours"): the limit comes from the chosen size.
@@ -353,7 +380,7 @@
           </div>
         </div>
         <div class="card__media">
-          <img src="${esc(imageOf(item))}" alt="${esc(item.name)}" loading="lazy" data-add="${esc(item.id)}">
+          ${galleryHtml(item, "card__img", `data-add="${esc(item.id)}"`)}
           <button class="add-btn" type="button" data-add="${esc(item.id)}">${inCart ? `ADDED <span class="in-cart">(${inCart})</span>` : "ADD"}</button>
         </div>
       </article>`;
@@ -458,13 +485,8 @@
           ${S.phone ? `<a href="tel:${esc(S.phone.replace(/\s/g, ""))}">${icon("phone")} Call us</a>` : ""}
         </div>
       </div>` : "";
-    const imgs = imagesOf(item);
-    const hero = imgs.length > 1
-      ? `<div class="hero-gallery"><div class="hero-gallery__track">${imgs.map((src, i) => `<img class="product-hero" src="${esc(src)}" alt="${esc(item.name)} photo ${i + 1}">`).join("")}</div>
-          <div class="dots">${imgs.map((_, i) => `<span class="${i ? "" : "on"}"></span>`).join("")}</div></div>`
-      : `<img class="product-hero" src="${esc(imgs[0])}" alt="${esc(item.name)}">`;
     const o = openSheet(item.name,
-      `${hero}
+      `${galleryHtml(item, "product-hero")}
        <p class="product-desc">${esc(item.description)}</p>${info}${groups}`,
       `<div class="foot-row">
          <div class="qty"><button type="button" data-q="-1" aria-label="Decrease">−</button><span>1</span><button type="button" data-q="1" aria-label="Increase">+</button></div>
@@ -506,11 +528,6 @@
         toast(`Added ${qty} × ${item.name}`);
       }
     });
-    const track = $(".hero-gallery__track", o);
-    if (track) track.addEventListener("scroll", () => {
-      const i = Math.round(track.scrollLeft / track.clientWidth);
-      $$(".hero-gallery .dots span", o).forEach((d, j) => d.classList.toggle("on", i === j));
-    }, { passive: true });
     syncMulti();
     update();
   }
@@ -631,9 +648,11 @@
     const q = deliveryQuote();
     if (info) {
       if (status) info.innerHTML = status;
-      else if (!details.loc) info.textContent = details.locSkipped
-        ? "We'll confirm the delivery charge on chat."
-        : "Tap “Use my current location”, or search the delivery address, to calculate the delivery charge.";
+      else if (!details.loc) info.textContent = geo.state === "searching"
+        ? "Finding the address…"
+        : geo.state === "notfound"
+          ? "We couldn't find this address on the map. Tap “Use my current location”, or place the order and we'll confirm the delivery charge on chat."
+          : "Enter the address, or tap “Use my current location”, to calculate the delivery charge.";
       else if (!q) info.textContent = "Calculating distance…";
       else {
         const dist = `${details.kmSource === "approx" ? "~" : ""}${q.km.toFixed(1)} km${details.kmSource === "road" ? " by road" : " (approx.)"}`;
@@ -643,7 +662,9 @@
       }
     }
     const dl = $("[data-delivery]", o);
-    if (dl) dl.textContent = !details.loc ? (details.locSkipped ? "To be confirmed" : "Calculated after entering address") : !q ? "Calculating…" : q.outside ? "To be confirmed" : rupee(q.charge);
+    if (dl) dl.textContent = !details.loc
+      ? (geo.state === "searching" ? "Calculating…" : geo.state === "notfound" ? "To be confirmed" : "Calculated after entering address")
+      : !q ? "Calculating…" : q.outside ? "To be confirmed" : rupee(q.charge);
     const ad = $("[data-addons-total]", o);
     if (ad) ad.textContent = rupee(addonsTotal());
     const gt = $("[data-grand]", o);
@@ -655,8 +676,9 @@
   async function setLocation(o, latlng, opts = {}) {
     const loc = { lat: +latlng.lat.toFixed(6), lng: +latlng.lng.toFixed(6) };
     details.loc = loc;
+    details.locFrom = opts.from || details.locFrom || "address";
     details.km = null;
-    details.locSkipped = false;
+    geo.state = null;
     store.set("details", details);
     updateDeliveryUI(o);
     const city = state.city;
@@ -681,30 +703,59 @@
     } catch (e) { /* address stays manual */ }
   }
 
-  async function searchPlaces(o, query) {
-    const box = $(".loc-results", o);
-    if (!query.trim()) return;
-    box.classList.remove("hidden");
-    box.innerHTML = `<p class="fine">Searching…</p>`;
+  /* Delivery charge from the typed address: look the address up (then its pincode, area or
+     landmark) on OpenStreetMap, near the kitchen, and use the first match. */
+  const geo = { state: null, run: 0, timer: null };
+  async function nominatim(params) {
     const k = D.kitchens[state.city];
-    const vb = [k.lng - 0.6, k.lat + 0.6, k.lng + 0.6, k.lat - 0.6].join(",");
-    try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=in&viewbox=${vb}&q=${encodeURIComponent(query)}`);
-      const list = await res.json();
-      box.innerHTML = list.length
-        ? list.map((p) => `<button type="button" data-place="${p.lat},${p.lon}">${icon("pin")}<span>${esc(p.display_name)}</span></button>`).join("")
-        : `<p class="fine">No places found. Try a nearby landmark or area name.</p>`;
-    } catch (e) {
-      box.innerHTML = `<p class="fine">Search is unavailable right now. Please use your current location, or skip and we'll confirm on chat.</p>`;
+    const q = new URLSearchParams({ format: "jsonv2", limit: "1", countrycodes: "in", viewbox: [k.lng - 0.5, k.lat + 0.5, k.lng + 0.5, k.lat - 0.5].join(","), bounded: "1", ...params });
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?${q}`);
+    const list = await res.json();
+    return list[0] ? { lat: +list[0].lat, lng: +list[0].lon } : null;
+  }
+  async function geocodeAddress(o) {
+    const address = (details.address || "").trim(), landmark = (details.landmark || "").trim();
+    if (!address || details.loc) return;
+    const run = ++geo.run;
+    geo.state = "searching";
+    updateDeliveryUI(o);
+    const pin = ((address + " " + landmark).match(/\b\d{6}\b/) || [])[0];
+    const parts = address.split(",").map((x) => x.trim()).filter(Boolean);
+    const attempts = [
+      { q: [address, landmark, state.city].filter(Boolean).join(", ") },
+      pin && { postalcode: pin, country: "India" },
+      parts.length > 2 && { q: [...parts.slice(-3), state.city].join(", ") },
+      landmark && { q: `${landmark}, ${state.city}` }
+    ].filter(Boolean);
+    for (const params of attempts) {
+      let hit = null;
+      try { hit = await nominatim(params); } catch (e) { /* try the next one */ }
+      if (run !== geo.run) return; // the address changed meanwhile
+      if (hit) { setLocation(o, hit, { from: "address", fillAddress: false }); return; }
     }
+    geo.state = "notfound";
+    updateDeliveryUI(o);
+  }
+  // A new address replaces the location; a landmark/flat edit keeps a GPS location.
+  function addressEdited(o, now, field) {
+    if (field === "address" || details.locFrom !== "gps") {
+      details.loc = null;
+      details.km = null;
+      store.set("details", details);
+      geo.state = null;
+      geo.run++;
+      updateDeliveryUI(o);
+    }
+    clearTimeout(geo.timer);
+    geo.timer = setTimeout(() => geocodeAddress(o), now ? 0 : 1500);
   }
 
   function useMyLocation(o) {
     if (!navigator.geolocation) { toast("Location isn't available on this device"); return; }
     updateDeliveryUI(o, "Finding you…");
     navigator.geolocation.getCurrentPosition(
-      (p) => setLocation(o, { lat: p.coords.latitude, lng: p.coords.longitude }),
-      () => { updateDeliveryUI(o); toast("Couldn't get your location. Please search the address instead."); },
+      (p) => setLocation(o, { lat: p.coords.latitude, lng: p.coords.longitude }, { from: "gps" }),
+      () => { updateDeliveryUI(o); toast("Couldn't get your location. Please type the address instead."); },
       { enableHighAccuracy: true, timeout: 10000 }
     );
   }
@@ -763,19 +814,12 @@
         ${m.gift ? `<div class="field-row">${f("recipient", "Recipient's name", "text", "required")}${f("recipientPhone", "Recipient's phone", "tel", 'inputmode="tel" required')}</div>` : ""}
         ${m.needsAddress ? `
           <div class="field">
-            <label>${m.gift ? "Recipient's location" : "Delivery location"}</label>
-            ${m.gift ? "" : `<button type="button" class="loc-gps loc-gps--big" data-loc-gps>${icon("pin")} Use my current location</button>`}
-            <div class="loc-search">
-              <input id="loc-q" type="search" placeholder="${m.gift ? "Search the recipient's area or landmark" : "Or search area, street or landmark"}" autocomplete="off">
-              <button type="button" class="loc-btn" data-loc-search aria-label="Search">${icon("search")}</button>
-            </div>
-            <div class="loc-results hidden"></div>
-            ${m.gift ? `<button type="button" class="loc-gps" data-loc-gps>${icon("pin")} Use my current location</button>` : ""}
-            <p class="loc-info"></p>
-            ${!details.loc && !details.locSkipped ? `<button type="button" class="link loc-skip" data-loc-skip>Can't find it? Skip and confirm delivery charge on chat</button>` : ""}
-          </div>` +
-          f("address", m.gift ? "Recipient's address" : "Delivery address", "textarea", 'autocomplete="street-address" required') +
-          f("landmark", "Flat / landmark / pincode") : ""}
+            <label for="f-address">${m.gift ? "Recipient's address" : "Delivery address"}</label>
+            <button type="button" class="loc-gps loc-gps--big" data-loc-gps>${icon("pin")} Use my current location</button>
+            <textarea id="f-address" name="address" autocomplete="street-address" placeholder="${m.gift ? "Recipient's house / street, area" : "Or type your house / street, area"}" required>${esc(details.address || "")}</textarea>
+          </div>
+          ${f("landmark", "Flat / landmark / pincode")}
+          <p class="loc-info"></p>` : ""}
         ${f("date", m.needsAddress ? "Delivery date" : "Pick-up date", "date", `min="${minDate()}" required`)}
         <div class="field"><label>${m.needsAddress ? "Delivery slot" : "Pick-up slot"}</label><div data-slots>${slotsHtml()}</div></div>
         ${m.gift ? addonsHtml() : ""}
@@ -787,6 +831,7 @@
 
     $(".form", o).addEventListener("input", (e) => {
       if (e.target.name) { details[e.target.name] = e.target.value; store.set("details", details); }
+      if (e.target.name === "address" || e.target.name === "landmark") addressEdited(o, false, e.target.name);
       if (e.target.name === "date") $("[data-slots]", o).innerHTML = slotsHtml();
       const at = e.target.dataset && e.target.dataset.addonText;
       if (at) {
@@ -800,20 +845,17 @@
       updateDeliveryUI(o);
       // Location from another city, or distance not worked out yet: recalculate.
       if (details.loc && (details.km == null || details.kmFor !== state.city)) setLocation(o, details.loc, { fillAddress: false });
-      $("#loc-q", o).addEventListener("keydown", (e) => {
-        if (e.key === "Enter") { e.preventDefault(); searchPlaces(o, e.target.value); }
+      else if (!details.loc && details.address && geo.state !== "notfound") geocodeAddress(o);
+      // Leaving the address fields looks the address up straight away.
+      $(".form", o).addEventListener("change", (e) => {
+        if ((e.target.name === "address" || e.target.name === "landmark") && !details.loc) {
+          clearTimeout(geo.timer);
+          geocodeAddress(o);
+        }
       });
     }
     o.addEventListener("click", (e) => {
-      if (e.target.closest("[data-loc-search]")) { searchPlaces(o, $("#loc-q", o).value); return; }
       if (e.target.closest("[data-loc-gps]")) { useMyLocation(o); return; }
-      if (e.target.closest("[data-loc-skip]")) {
-        details.locSkipped = true;
-        store.set("details", details);
-        e.target.closest("[data-loc-skip]").remove();
-        updateDeliveryUI(o);
-        return;
-      }
       const slot = e.target.closest("[data-slot]");
       if (slot) {
         details.time = slot.dataset.slot;
@@ -831,13 +873,6 @@
         updateDeliveryUI(o);
         const input = $(`[data-addon-text="${a.id}"]`, o);
         if (input && +ad.dataset.ad > 0) input.focus();
-        return;
-      }
-      const place = e.target.closest("[data-place]");
-      if (place) {
-        const [lat, lng] = place.dataset.place.split(",").map(Number);
-        $(".loc-results", o).classList.add("hidden");
-        setLocation(o, { lat, lng }, { zoom: 16 });
         return;
       }
       const d = e.target.closest("[data-d]");
@@ -898,7 +933,7 @@
     if (addonLines().length) out.push(`Add-ons: ${rupee(addonsTotal())}`);
     const q = deliveryQuote();
     if (m.needsAddress) {
-      if (!q) out.push("Delivery: to be confirmed (location not pinned)");
+      if (!q) out.push("Delivery: to be confirmed (address not found on the map)");
       else {
         const dist = `${q.km.toFixed(1)} km${details.kmSource === "approx" ? " (approx.)" : ""}`;
         out.push(q.outside
@@ -1023,7 +1058,11 @@
     if (m.gift && !details.recipient.trim()) missing.push("recipient's name");
     if (m.gift && !details.recipientPhone.trim()) missing.push("recipient's phone");
     if (m.needsAddress && !details.address.trim()) missing.push("address");
-    if (m.needsAddress && !details.loc && !details.locSkipped) missing.push("your location (use current location or search the address)");
+    if (!missing.length && m.needsAddress && !details.loc && geo.state === "searching") {
+      err.textContent = "Still calculating the delivery charge. Please try again in a second.";
+      err.classList.remove("hidden");
+      return;
+    }
     if (!missing.length && m.needsAddress && details.loc && !deliveryQuote()) {
       err.textContent = "Still calculating the delivery distance. Please try again in a second.";
       err.classList.remove("hidden");

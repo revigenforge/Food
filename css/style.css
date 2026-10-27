@@ -890,10 +890,26 @@ body[data-page="admin"] main { padding-top: 6px; max-width: 760px; }
 /* ---------- Option notes, product photo gallery ---------- */
 .opt__note { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-top: 1px; }
 .opt b { text-align: right; }
-.hero-gallery { position: relative; }
-.hero-gallery__track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; border-radius: 16px; scrollbar-width: none; }
-.hero-gallery__track::-webkit-scrollbar { display: none; }
-.hero-gallery__track .product-hero { flex: 0 0 100%; scroll-snap-align: start; border-radius: 0; }
-.hero-gallery .dots { position: absolute; left: 0; right: 0; bottom: 10px; margin: 0; }
-.hero-gallery .dots span { background: rgba(255,255,255,.6); }
-.hero-gallery .dots span.on { background: #fff; }
+.swipe { position: relative; }
+.swipe__track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; border-radius: 14px; }
+.swipe__track::-webkit-scrollbar { display: none; }
+.swipe__track > img { flex: 0 0 100%; scroll-snap-align: start; border-radius: 0; }
+.swipe__dots { position: absolute; left: 0; right: 0; bottom: 8px; display: flex; justify-content: center; gap: 5px; pointer-events: none; }
+.swipe__dots span { width: 6px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.65); box-shadow: 0 0 2px rgba(0,0,0,.3); transition: width .2s; }
+.swipe__dots span.on { width: 14px; background: #fff; }
+.swipe__arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; display: none; place-items: center; border-radius: 50%; background: rgba(255,255,255,.9); color: var(--cocoa); box-shadow: 0 2px 6px rgba(0,0,0,.2); }
+.swipe__arrow svg { width: 16px; height: 16px; }
+.swipe__arrow--prev { left: 8px; }
+.swipe__arrow--next { right: 8px; }
+@media (hover: hover) and (pointer: fine) { .swipe__arrow { display: grid; } }
+.card__media .swipe { width: 140px; }
+.card__media .swipe__track { border-radius: 14px; }
+.card__media .card__img, .card__media > .card__img { width: 140px; height: 140px; object-fit: cover; border-radius: 14px; background: var(--blush); cursor: pointer; }
+.card__media .swipe__track > img { border-radius: 0; }
+.card__media .swipe__dots { bottom: 28px; }
+.card__media .swipe__arrow { width: 26px; height: 26px; top: 45%; }
+@media (max-width: 400px) {
+  .card__media .swipe, .card__media .card__img { width: 118px; }
+  .card__media .card__img { height: 118px; }
+}
+.card__media { align-self: flex-start; }

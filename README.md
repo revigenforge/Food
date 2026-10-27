@@ -24,7 +24,7 @@ The business takes orders by DM, so checkout builds a ready-to-send order messag
 
 ### Delivery charge by distance
 
-For **Get it Delivered** and **Send as a Gift**, the customer taps **Use my current location** or searches the address (or skips, and the charge is confirmed on chat).
+For **Get it Delivered** and **Send as a Gift**, the delivery charge is calculated from the address the customer types (looked up on OpenStreetMap, falling back to the pincode, area or landmark) or from **Use my current location**. If the address can't be found, the charge is confirmed on chat.
 The site works out the road distance from the kitchen in the chosen city, rounds it up to the next km and charges the matching price from `delivery.slabs` (6.4 km → 7 km → ₹155).
 The delivery charge, total and a Google Maps link to the pin are included in the order message.
 
