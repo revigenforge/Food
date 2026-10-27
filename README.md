@@ -25,7 +25,7 @@ The business takes orders by DM, so checkout builds a ready-to-send order messag
 ### Delivery charge by distance
 
 For **Get it Delivered** and **Send as a Gift**, the customer taps **Use my current location** or searches the address (or skips, and the charge is confirmed on chat).
-The site works out the road distance from the kitchen in the chosen city and charges `ratePerKm` for every km, rounded up (6.4 km → 7 km × ₹20 = ₹140).
+The site works out the road distance from the kitchen in the chosen city, rounds it up to the next km and charges the matching price from `delivery.slabs` (6.4 km → 7 km → ₹155).
 The delivery charge, total and a Google Maps link to the pin are included in the order message.
 
 - Address search / auto-fill: OpenStreetMap Nominatim (free, no API key)
@@ -67,7 +67,8 @@ Until `upiId` is a real UPI ID, the order page says online payment isn't active 
 - Checkout offers 30-minute slots (`slots` in `js/config.js`, 5–9 PM). For same-day orders, slots within the prep time (`orderInfo.prepHours`) are greyed out.
 - Every product shows the prep time, first dispatch slot and the "need it urgently?" note (`orderInfo`).
 - **Send as a Gift** offers add-ons (`giftAddons`): gift note, chocolate message (20 characters), candles, roses, bouquet. They're added to the total and listed on the order.
-- OG Cookie Pie lets customers mix flavours: up to `flavours` per size (Couple 2, Family 3, Celebration 3).
+- OG Cookie Pie lets customers mix flavours: up to `flavours` per size (Couples 2, Family 3, Celebration 3). Adding Nutella (a `premium` flavour) switches to the size's `premiumPrice`.
+- Items can be limited to some cities (`cities`; Bengaluru only has the OG Cookie Pie) and can have several photos (`images`).
 
 ### Google Calendar
 

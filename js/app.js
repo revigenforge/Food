@@ -81,10 +81,16 @@
     cart: store.get("cart", [])
   };
   if (!S.cities.includes(state.city)) state.city = S.cities[0];
+  // Drop saved cart lines for items that are no longer on the menu, or not sold in this city.
+  state.cart = state.cart.filter((l) => S.items.some((i) => i.id === l.id && (!i.cities || i.cities.includes(state.city))));
   if (state.mode && !S.modes[state.mode]) state.mode = null;
 
   const saveCart = () => { store.set("cart", state.cart); renderCartCount(); };
   const findItem = (id) => S.items.find((i) => i.id === id);
+  const PLACEHOLDER_IMG = "assets/img/placeholder.jpg";
+  const imagesOf = (item) => (item.images && item.images.length ? item.images : item.image ? [item.image] : [PLACEHOLDER_IMG]);
+  const imageOf = (item) => imagesOf(item)[0];
+  const inCity = (x, city = state.city) => !x.cities || x.cities.includes(city);
 
   // Multi-select groups (e.g. "mix up to 3 flavours"): the limit comes from the chosen size.
   const multiLimit = (item, picks) => item.options[0].choices[picks[0]].flavours || item.options[0].choices.length;
@@ -92,20 +98,26 @@
 
   function priceRange(item) {
     const base = item.options[0].choices.map((c) => c.price);
+    const top = Math.max(...item.options[0].choices.map((c) => c.premiumPrice || c.price));
     const maxPick = Math.max(...item.options[0].choices.map((c) => c.flavours || 1));
     const extra = item.options.slice(1).reduce((sum, g) => {
       const adds = g.choices.map((c) => c.add || 0).sort((a, b) => b - a);
       return sum + (g.multi ? adds.slice(0, maxPick).reduce((a, b) => a + Math.max(0, b), 0) : Math.max(0, adds[0]));
     }, 0);
-    return [Math.min(...base), Math.max(...base) + extra];
+    return [Math.min(...base), Math.max(Math.max(...base) + extra, top)];
   }
+  // A "premium" flavour (e.g. Nutella) anywhere in the mix moves the size to its premium price.
+  const hasPremium = (item, picks) => item.options.some((g, gi) => gi > 0 && pickList(g, picks[gi]).some((ci) => (g.choices[ci] || {}).premium));
   function priceFor(item, picks) {
     return item.options.reduce((sum, g, gi) => {
-      if (gi === 0) return sum + (g.choices[picks[0]] || g.choices[0]).price;
+      if (gi === 0) {
+        const c = g.choices[picks[0]] || g.choices[0];
+        return sum + (c.premiumPrice && hasPremium(item, picks) ? c.premiumPrice : c.price);
+      }
       return sum + pickList(g, picks[gi]).reduce((a, ci) => a + ((g.choices[ci] || {}).add || 0), 0);
     }, 0);
   }
-  const optionCount = (item) => item.options.reduce((n, g) => n * g.choices.length, 1);
+  const optionCount = (item) => item.options.reduce((n, g) => (g.multi ? n : n * g.choices.length), 1);
   const cartQty = () => state.cart.reduce((n, l) => n + l.qty, 0);
   const cartTotal = () => state.cart.reduce((n, l) => {
     const item = findItem(l.id);
@@ -205,10 +217,7 @@
 
     // Tabs
     const tabs = $(".tabs");
-    tabs.innerHTML = [{ id: "all", name: "All" }, ...S.categories]
-      .filter((c) => c.id === "all" || S.items.some((i) => i.category === c.id))
-      .map((c) => `<button class="tab" role="tab" data-cat="${c.id}" aria-selected="${c.id === "all"}">${esc(c.name)}</button>`)
-      .join("");
+    renderTabs();
     tabs.addEventListener("click", (e) => {
       const b = e.target.closest(".tab");
       if (!b) return;
@@ -252,14 +261,26 @@
     if (target) setTimeout(() => focusItem(target), 200);
   }
 
+  // Only categories with something to order in the current city.
+  function renderTabs() {
+    const tabs = $(".tabs");
+    if (!tabs) return;
+    const cats = S.categories.filter((c) => S.items.some((i) => i.category === c.id && inCity(i)));
+    if (view.cat !== "all" && !cats.some((c) => c.id === view.cat)) view.cat = "all";
+    tabs.innerHTML = [{ id: "all", name: "All" }, ...cats]
+      .map((c) => `<button class="tab" role="tab" data-cat="${c.id}" aria-selected="${c.id === view.cat}">${esc(c.name)}</button>`)
+      .join("");
+  }
+
   function renderModeChip() {
     const m = S.modes[state.mode];
     $(".mode-chip").innerHTML = `${icon(m.icon)} ${esc(m.label)} · ${esc(state.city)}`;
   }
 
+  const cityBanners = () => S.banners.filter((b) => inCity(b));
   function renderSlider() {
     const wrap = $(".slides"), dots = $(".dots");
-    wrap.innerHTML = S.banners.map((b) => `
+    wrap.innerHTML = cityBanners().map((b) => `
       <button type="button" class="slide" data-target="${esc(b.target)}">
         <div class="slide__text">
           <span class="slide__eyebrow">${esc(b.eyebrow)}</span>
@@ -269,7 +290,10 @@
         </div>
         <div class="slide__img"><img src="${esc(b.image)}" alt="${esc(b.title)}" loading="lazy"></div>
       </button>`).join("");
-    dots.innerHTML = S.banners.map((_, i) => `<span class="${i ? "" : "on"}"></span>`).join("");
+    dots.innerHTML = cityBanners().length > 1 ? cityBanners().map((_, i) => `<span class="${i ? "" : "on"}"></span>`).join("") : "";
+    wrap.scrollLeft = 0;
+    if (wrap.dataset.bound) return; // listeners and auto-play are set up once
+    wrap.dataset.bound = "1";
     wrap.addEventListener("click", (e) => {
       const s = e.target.closest(".slide");
       if (s) focusItem(s.dataset.target);
@@ -280,12 +304,14 @@
       $$("span", dots).forEach((d, i) => d.classList.toggle("on", i === idx));
     };
     wrap.addEventListener("scroll", () => requestAnimationFrame(update), { passive: true });
-    if (S.banners.length > 1 && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
       let paused = false;
       wrap.addEventListener("pointerdown", () => { paused = true; });
       setInterval(() => {
         if (paused || document.hidden) return;
-        const next = (idx + 1) % S.banners.length;
+        const count = cityBanners().length;
+        if (count < 2) return;
+        const next = (idx + 1) % count;
         wrap.scrollTo({ left: next * wrap.clientWidth, behavior: "smooth" });
       }, 4500);
     }
@@ -327,7 +353,7 @@
           </div>
         </div>
         <div class="card__media">
-          <img src="${esc(item.image)}" alt="${esc(item.name)}" loading="lazy" data-add="${esc(item.id)}">
+          <img src="${esc(imageOf(item))}" alt="${esc(item.name)}" loading="lazy" data-add="${esc(item.id)}">
           <button class="add-btn" type="button" data-add="${esc(item.id)}">${inCart ? `ADDED <span class="in-cart">(${inCart})</span>` : "ADD"}</button>
         </div>
       </article>`;
@@ -338,6 +364,7 @@
     if (!root) return;
     const collapsed = new Set($$(".section.collapsed", root).map((s) => s.dataset.cat));
     let items = S.items.filter((i) =>
+      inCity(i) &&
       (view.cat === "all" || i.category === view.cat) &&
       (!view.q || (i.name + " " + i.description).toLowerCase().includes(view.q))
     );
@@ -416,8 +443,10 @@
         ${g.choices.map((c, ci) => `
           <label class="opt">
             <input type="${g.multi ? "checkbox" : "radio"}" name="g${gi}" value="${ci}" ${ci === 0 ? "checked" : ""}>
-            <span>${esc(c.label)}</span>
-            <b>${gi === 0 ? rupee(c.price) : c.add ? "+ " + rupee(c.add) : ""}</b>
+            <span>${esc(c.label)}${c.note ? `<small class="opt__note">${esc(c.note)}</small>` : ""}</span>
+            <b>${gi === 0
+              ? `${rupee(c.price)}${c.premiumPrice ? `<small class="opt__note">${rupee(c.premiumPrice)} with ${esc(premiumNames(item))}</small>` : ""}`
+              : c.premium ? `<small class="opt__note">Premium pricing</small>` : c.add ? "+ " + rupee(c.add) : ""}</b>
           </label>`).join("")}
       </div>`).join("");
     const info = S.orderInfo ? `
@@ -429,8 +458,13 @@
           ${S.phone ? `<a href="tel:${esc(S.phone.replace(/\s/g, ""))}">${icon("phone")} Call us</a>` : ""}
         </div>
       </div>` : "";
+    const imgs = imagesOf(item);
+    const hero = imgs.length > 1
+      ? `<div class="hero-gallery"><div class="hero-gallery__track">${imgs.map((src, i) => `<img class="product-hero" src="${esc(src)}" alt="${esc(item.name)} photo ${i + 1}">`).join("")}</div>
+          <div class="dots">${imgs.map((_, i) => `<span class="${i ? "" : "on"}"></span>`).join("")}</div></div>`
+      : `<img class="product-hero" src="${esc(imgs[0])}" alt="${esc(item.name)}">`;
     const o = openSheet(item.name,
-      `<img class="product-hero" src="${esc(item.image)}" alt="${esc(item.name)}">
+      `${hero}
        <p class="product-desc">${esc(item.description)}</p>${info}${groups}`,
       `<div class="foot-row">
          <div class="qty"><button type="button" data-q="-1" aria-label="Decrease">−</button><span>1</span><button type="button" data-q="1" aria-label="Increase">+</button></div>
@@ -472,9 +506,15 @@
         toast(`Added ${qty} × ${item.name}`);
       }
     });
+    const track = $(".hero-gallery__track", o);
+    if (track) track.addEventListener("scroll", () => {
+      const i = Math.round(track.scrollLeft / track.clientWidth);
+      $$(".hero-gallery .dots span", o).forEach((d, j) => d.classList.toggle("on", i === j));
+    }, { passive: true });
     syncMulti();
     update();
   }
+  const premiumNames = (item) => item.options.flatMap((g) => g.choices.filter((c) => c.premium).map((c) => c.label)).join(" / ");
 
   /* ---------- Cart + checkout ---------- */
   const details = store.get("details", { name: "", phone: "", address: "", landmark: "", date: "", time: "", recipient: "", recipientPhone: "", note: "" });
@@ -582,7 +622,7 @@
     if (!S.modes[state.mode].needsAddress || details.km == null || details.kmFor !== state.city) return null;
     const billedKm = Math.max(1, Math.ceil(details.km));
     const outside = D.maxKm && details.km > D.maxKm;
-    return { km: details.km, billedKm, outside, charge: outside ? null : Math.max(D.minCharge || 0, billedKm * D.ratePerKm) };
+    return { km: details.km, billedKm, outside, charge: outside ? null : D.slabs[Math.min(billedKm, D.slabs.length) - 1] };
   }
   const grandTotal = () => cartTotal() + addonsTotal() + ((deliveryQuote() || {}).charge || 0);
 
@@ -599,7 +639,7 @@
         const dist = `${details.kmSource === "approx" ? "~" : ""}${q.km.toFixed(1)} km${details.kmSource === "road" ? " by road" : " (approx.)"}`;
         info.innerHTML = q.outside
           ? `<b>${dist}</b>: outside our usual delivery area (up to ${D.maxKm} km). Send the order and we'll confirm delivery on chat.`
-          : `<b>${dist}</b> from our ${esc(state.city)} kitchen · Delivery <b>${rupee(q.charge)}</b> <span>(${q.billedKm} km × ${rupee(D.ratePerKm)})</span>`;
+          : `<b>${dist}</b> from our ${esc(state.city)} kitchen · Delivery <b>${rupee(q.charge)}</b>`;
       }
     }
     const dl = $("[data-delivery]", o);
@@ -686,7 +726,7 @@
       const { item, opts, total } = lineText(l);
       return `
         <div class="cart-item">
-          <img src="${esc(item.image)}" alt="">
+          <img src="${esc(imageOf(item))}" alt="">
           <div class="cart-item__info">
             <p class="cart-item__name">${esc(item.name)}</p>
             <p class="cart-item__opts">${esc(opts)}</p>
@@ -713,7 +753,7 @@
       ${D.kitchens[state.city] && D.kitchens[state.city].address ? `
         <div class="store-addr">${icon("pin")}<div><b>Store address · ${esc(state.city)}</b><span>${esc(D.kitchens[state.city].address)}</span></div></div>` : ""}
       <p class="fine">${m.needsAddress
-        ? `Delivery charges are calculated after entering the address (${rupee(D.ratePerKm)}/km, within ${D.maxKm} km).`
+        ? `Delivery charges are calculated after entering the address, based on distance (within ${D.maxKm} km).`
         : "Pick it up yourself, or arrange your own delivery (Porter, Rapido, etc.) from our store."} Prices are confirmed when we accept your order.${P.upiId ? ` Pay by UPI ${P.payAfter === "placed" ? "on your order page" : "once your order is confirmed"}.` : ""}</p>
       <form class="form" novalidate>
         <h3>Order details</h3>
@@ -816,7 +856,19 @@
       const sc = e.target.closest("[data-set-city]");
       if (sm || sc) {
         if (sm) { state.mode = sm.dataset.setMode; store.set("mode", state.mode); }
-        if (sc) { state.city = sc.dataset.setCity; store.set("city", state.city); }
+        if (sc) {
+          state.city = sc.dataset.setCity;
+          store.set("city", state.city);
+          const gone = state.cart.filter((l) => !inCity(findItem(l.id)));
+          if (gone.length) {
+            state.cart = state.cart.filter((l) => inCity(findItem(l.id)));
+            saveCart();
+            toast(`${[...new Set(gone.map((l) => findItem(l.id).name))].join(", ")} isn't available in ${state.city}, so it was removed`);
+          }
+          renderTabs();
+          renderCards();
+          if ($(".slides")) renderSlider();
+        }
         if ($(".mode-chip")) renderModeChip();
         renderCartCount();
         const top = $(".sheet__body", o).scrollTop;
@@ -851,7 +903,7 @@
         const dist = `${q.km.toFixed(1)} km${details.kmSource === "approx" ? " (approx.)" : ""}`;
         out.push(q.outside
           ? `Delivery: ${dist}, outside delivery area, please confirm`
-          : `Delivery: ${dist} → ${q.billedKm} km × ${rupee(D.ratePerKm)} = ${rupee(q.charge)}`);
+          : `Delivery (${dist}): ${rupee(q.charge)}`);
       }
     }
     out.push(`Total: ${rupee(grandTotal())}`);

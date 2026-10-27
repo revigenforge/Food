@@ -886,3 +886,14 @@ body[data-page="admin"] main { padding-top: 6px; max-width: 760px; }
   .mode-btn { font-size: 13px; letter-spacing: .03em; padding: 12px 16px; gap: 8px; }
   .mode-btn .pill { font-size: 10px; padding: 4px 8px; }
 }
+
+/* ---------- Option notes, product photo gallery ---------- */
+.opt__note { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-top: 1px; }
+.opt b { text-align: right; }
+.hero-gallery { position: relative; }
+.hero-gallery__track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; border-radius: 16px; scrollbar-width: none; }
+.hero-gallery__track::-webkit-scrollbar { display: none; }
+.hero-gallery__track .product-hero { flex: 0 0 100%; scroll-snap-align: start; border-radius: 0; }
+.hero-gallery .dots { position: absolute; left: 0; right: 0; bottom: 10px; margin: 0; }
+.hero-gallery .dots span { background: rgba(255,255,255,.6); }
+.hero-gallery .dots span.on { background: #fff; }
