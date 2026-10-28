@@ -34,7 +34,7 @@ function cleanOrder(b) {
   const phone = str(b.customer && b.customer.phone, 20);
   if (!name || !/^[+\d][\d\s-]{7,}$/.test(phone)) throw new HttpError(400, "Please add your name and phone number.");
   const loc = b.loc && Number.isFinite(+b.loc.lat) && Number.isFinite(+b.loc.lng) ? { lat: +b.loc.lat, lng: +b.loc.lng } : null;
-  const delivery = b.delivery ? { km: num(b.delivery.km), charge: b.delivery.charge == null ? null : num(b.delivery.charge), outside: !!b.delivery.outside } : null;
+  const delivery = b.delivery ? { km: num(b.delivery.km), charge: b.delivery.charge == null ? null : num(b.delivery.charge), outside: !!b.delivery.outside, vip: !!b.delivery.vip } : null;
   return {
     items,
     subtotal: num(b.subtotal),

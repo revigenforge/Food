@@ -62,6 +62,13 @@ window.SITE = {
       365, 380, 395, 410, 425, 440, 455, 470, 485, 500 // 21–30 km
     ],
     maxKm: 30,
+    // Optional fun upgrade at checkout: replaces the distance charge with a flat price.
+    vip: {
+      name: "Owner’s VIP Delivery 👑",
+      tagline: "Home delivery by the owner himself. Yes, seriously.",
+      chosen: "👑 Send the Boss: your dessert. Our founder. Absolutely questionable economics.",
+      price: 5000
+    },
     roadFactor: 1.3, // used to estimate road distance when the routing service is unreachable
     kitchens: {
       // mapUrl: Google Maps link for the "Get directions" button at checkout.

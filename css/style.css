@@ -915,3 +915,16 @@ body[data-page="admin"] main { padding-top: 6px; max-width: 760px; }
 .card__media { align-self: flex-start; }
 .store-addr__map { display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; color: var(--rose-dark); font-weight: 600; text-decoration: none; }
 .store-addr__map svg { width: 14px; height: 14px; margin: 0; }
+
+/* ---------- Owner's VIP delivery ---------- */
+.vip { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 16px; border-radius: 16px; border: 1.5px dashed var(--gold); background: linear-gradient(135deg, #fffaf0, #fdf1d8); text-align: left; color: var(--cocoa); }
+.vip__text { flex: 1; min-width: 0; }
+.vip__text b { display: block; font-size: 15px; }
+.vip__text small { display: block; margin-top: 2px; color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+.vip__price { flex: none; text-align: right; font-weight: 700; font-size: 15px; }
+.vip__price small { display: block; margin-top: 2px; font-size: 11.5px; font-weight: 600; color: #9a7520; text-transform: uppercase; letter-spacing: .05em; }
+.vip[aria-pressed="true"] { border-style: solid; background: linear-gradient(135deg, #f8e7b8, #e9c97a); box-shadow: 0 6px 18px rgba(201,162,74,.35); }
+.vip[aria-pressed="true"] .vip__price small { color: var(--cocoa); }
+.cart-item__addon { margin: -4px 0 8px; font-size: 13px; color: var(--rose-dark); display: flex; justify-content: space-between; gap: 8px; }
+.cart-item__addon b { font-weight: 600; color: var(--ink); }
+.sheet .addons { margin-top: 18px; }

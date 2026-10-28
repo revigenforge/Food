@@ -152,11 +152,21 @@
   }, 0);
   const qtyOfItem = (id) => state.cart.filter((l) => l.id === id).reduce((n, l) => n + l.qty, 0);
 
-  function addToCart(id, picks, qty) {
-    const key = id + ":" + JSON.stringify(picks);
+  /* ---------- Add-ons (chosen per product, in the product popup) ---------- */
+  const ADDONS = S.giftAddons || [];
+  // A line's add-ons: [{ id, qty, text }] → full details with totals.
+  const lineAddons = (line) => (line.addons || []).map((x) => {
+    const a = ADDONS.find((y) => y.id === x.id);
+    return a ? { ...a, qty: x.qty, message: (x.text || "").trim(), total: a.price * x.qty } : null;
+  }).filter(Boolean);
+  const addonsTotal = () => state.cart.reduce((n, l) => n + lineAddons(l).reduce((m, a) => m + a.total, 0), 0);
+  const allAddons = () => state.cart.flatMap(lineAddons);
+
+  function addToCart(id, picks, qty, addons = []) {
+    const key = id + ":" + JSON.stringify(picks) + (addons.length ? ":" + JSON.stringify(addons) : "");
     const line = state.cart.find((l) => l.key === key);
     if (line) line.qty += qty;
-    else state.cart.push({ key, id, picks, qty });
+    else state.cart.push({ key, id, picks, qty, addons });
     saveCart();
     renderCards();
   }
@@ -464,7 +474,7 @@
     if (!bar) return;
     bar.classList.toggle("hidden", !n);
     document.body.classList.toggle("has-cart-bar", !!n);
-    if (n) $(".cart-bar__info").innerHTML = `${n} item${n > 1 ? "s" : ""} · ${rupee(cartTotal())}<small>${esc(S.modes[state.mode].label)} · ${esc(state.city)}</small>`;
+    if (n) $(".cart-bar__info").innerHTML = `${n} item${n > 1 ? "s" : ""} · ${rupee(cartTotal() + addonsTotal())}<small>${esc(S.modes[state.mode].label)} · ${esc(state.city)}</small>`;
   }
 
   /* ---------- Modal helpers ---------- */
@@ -494,6 +504,7 @@
     const item = findItem(id);
     if (!item) return;
     const picks = item.options.map((g) => (g.multi ? [0] : 0));
+    const adds = {}; // add-ons for this product: { id: { qty, text } }
     let qty = 1;
     const groups = item.options.map((g, gi) => `
       <div class="opt-group" data-group="${gi}">
@@ -518,7 +529,7 @@
       </div>` : "";
     const o = openSheet(item.name,
       `${galleryHtml(item, "product-hero")}
-       <p class="product-desc">${esc(item.description)}</p>${info}${groups}`,
+       <p class="product-desc">${esc(item.description)}</p>${info}${groups}${ADDONS.length ? `<div data-addons>${addonsHtml(adds)}</div>` : ""}`,
       `<div class="foot-row">
          <div class="qty"><button type="button" data-q="-1" aria-label="Decrease">−</button><span>1</span><button type="button" data-q="1" aria-label="Increase">+</button></div>
          <button class="btn" type="button" data-confirm>Add · <span data-total></span></button>
@@ -536,7 +547,15 @@
         $(`[data-group="${gi}"] [data-hint]`, o).textContent = `Choose up to ${limit}`;
       });
     };
-    const update = () => { $("[data-total]", o).textContent = rupee(priceFor(item, picks) * qty); $(".qty span", o).textContent = qty; };
+    const addsTotal = () => ADDONS.reduce((n, a) => n + a.price * ((adds[a.id] || {}).qty || 0), 0);
+    const update = () => { $("[data-total]", o).textContent = rupee(priceFor(item, picks) * qty + addsTotal()); $(".foot-row .qty span", o).textContent = qty; };
+    o.addEventListener("input", (e) => {
+      const id = e.target.dataset && e.target.dataset.addonText;
+      if (!id) return;
+      adds[id].text = e.target.value;
+      const c = e.target.nextElementSibling;
+      if (c) c.textContent = `${e.target.value.length}/${e.target.maxLength} characters`;
+    });
     o.addEventListener("change", (e) => {
       const m = e.target.name && e.target.name.match(/^g(\d+)$/);
       if (!m) return;
@@ -551,10 +570,25 @@
     o.addEventListener("click", (e) => {
       const q = e.target.closest("[data-q]");
       if (q) { qty = Math.max(1, Math.min(20, qty + +q.dataset.q)); update(); }
+      const ad = e.target.closest("[data-ad]");
+      if (ad) {
+        const a = ADDONS.find((x) => x.id === ad.dataset.addon);
+        const cur = adds[a.id] || { qty: 0, text: "" };
+        cur.qty = Math.max(0, Math.min(a.maxQty || 1, cur.qty + +ad.dataset.ad));
+        if (cur.qty) adds[a.id] = cur; else delete adds[a.id];
+        $("[data-addons]", o).innerHTML = addonsHtml(adds);
+        const input = $(`[data-addon-text="${a.id}"]`, o);
+        if (input && +ad.dataset.ad > 0) input.focus();
+        update();
+        return;
+      }
       if (e.target.closest("[data-confirm]")) {
         const empty = item.options.findIndex((g, gi) => g.multi && !picks[gi].length);
         if (empty > -1) { toast(`Please choose at least one ${item.options[empty].name.toLowerCase().replace(/s$/, "")}`); return; }
-        addToCart(item.id, picks.map((p) => (Array.isArray(p) ? p.slice().sort((a, b) => a - b) : p)), qty);
+        const noText = ADDONS.find((a) => a.text && adds[a.id] && !adds[a.id].text.trim());
+        if (noText) { toast(`Please write the text for your ${noText.name.toLowerCase()}`); $(`[data-addon-text="${noText.id}"]`, o).focus(); return; }
+        const addons = ADDONS.filter((a) => adds[a.id]).map((a) => ({ id: a.id, qty: adds[a.id].qty, ...(a.text ? { text: adds[a.id].text.trim() } : {}) }));
+        addToCart(item.id, picks.map((p) => (Array.isArray(p) ? p.slice().sort((a, b) => a - b) : p)), qty, addons);
         closeSheet();
         toast(`Added ${qty} × ${item.name}`);
       }
@@ -566,8 +600,6 @@
 
   /* ---------- Cart + checkout ---------- */
   const details = store.get("details", { name: "", phone: "", address: "", landmark: "", date: "", time: "", recipient: "", recipientPhone: "", note: "" });
-  details.addons = details.addons || {};
-  details.addonText = details.addonText || {};
 
   const localDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   function minDate() {
@@ -610,23 +642,14 @@
     }).join("")}</div>`;
   }
 
-  /* ---------- Gift add-ons ---------- */
-  const ADDONS = S.giftAddons || [];
-  function addonLines() {
-    if (!S.modes[state.mode].gift) return [];
-    return ADDONS.filter((a) => details.addons[a.id] > 0).map((a) => {
-      const qty = details.addons[a.id];
-      const text = a.text ? (details.addonText[a.id] || "").trim() : "";
-      return { ...a, qty, total: a.price * qty, message: text };
-    });
-  }
-  const addonsTotal = () => addonLines().reduce((n, a) => n + a.total, 0);
-  function addonsHtml() {
+  /* Add-on picker. sel = { id: { qty, text } } for the product being added. */
+  function addonsHtml(sel) {
     return `
       <div class="addons">
         <h3>Make it extra special <small>with add-ons</small></h3>
         ${ADDONS.map((a) => {
-          const qty = details.addons[a.id] || 0;
+          const qty = (sel[a.id] || {}).qty || 0;
+          const text = (sel[a.id] || {}).text || "";
           const ctrl = (a.maxQty || 1) > 1
             ? `<div class="qty qty--sm">${qty ? `<button type="button" data-addon="${a.id}" data-ad="-1" aria-label="Fewer">−</button><span>${qty}</span>` : ""}<button type="button" data-addon="${a.id}" data-ad="1" aria-label="Add">+</button></div>`
             : `<button type="button" class="addon-toggle" data-addon="${a.id}" data-ad="${qty ? -1 : 1}" aria-pressed="${!!qty}">${qty ? icon("check") + " Added" : "Add"}</button>`;
@@ -636,8 +659,8 @@
                 <div class="addon__info"><b>${esc(a.name)}</b> <span class="addon__price">${rupee(a.price)}</span>${a.desc ? `<small>${esc(a.desc)}</small>` : ""}</div>
                 ${ctrl}
               </div>
-              ${a.text && qty ? `<input class="addon__text" data-addon-text="${a.id}" maxlength="${a.text.max}" placeholder="${esc(a.text.placeholder || "")}" value="${esc(details.addonText[a.id] || "")}">
-                <small class="addon__count">${(details.addonText[a.id] || "").length}/${a.text.max} characters</small>` : ""}
+              ${a.text && qty ? `<input class="addon__text" data-addon-text="${a.id}" maxlength="${a.text.max}" placeholder="${esc(a.text.placeholder || "")}" value="${esc(text)}">
+                <small class="addon__count">${text.length}/${a.text.max} characters</small>` : ""}
             </div>`;
         }).join("")}
       </div>`;
@@ -667,7 +690,9 @@
 
   // { km, billedKm, charge } for the current pin, or null when not yet known.
   function deliveryQuote() {
-    if (!S.modes[state.mode].needsAddress || details.km == null || details.kmFor !== state.city) return null;
+    if (!S.modes[state.mode].needsAddress) return null;
+    if (D.vip && details.vip) return { vip: true, km: details.kmFor === state.city ? details.km : null, outside: false, charge: D.vip.price };
+    if (details.km == null || details.kmFor !== state.city) return null;
     const billedKm = Math.max(1, Math.ceil(details.km));
     const outside = D.maxKm && details.km > D.maxKm;
     return { km: details.km, billedKm, outside, charge: outside ? null : D.slabs[Math.min(billedKm, D.slabs.length) - 1] };
@@ -679,6 +704,7 @@
     const q = deliveryQuote();
     if (info) {
       if (status) info.innerHTML = status;
+      else if (q && q.vip) info.textContent = "👑 The owner will deliver this one himself.";
       else if (!details.loc) info.textContent = geo.state === "searching"
         ? "Finding the address…"
         : geo.state === "notfound"
@@ -693,11 +719,11 @@
       }
     }
     const dl = $("[data-delivery]", o);
-    if (dl) dl.textContent = !details.loc
+    const vipBox = $("[data-vip]", o);
+    if (vipBox) vipBox.setAttribute("aria-pressed", !!(q && q.vip));
+    if (dl) dl.textContent = q && q.vip ? rupee(q.charge) : !details.loc
       ? (geo.state === "searching" ? "Calculating…" : geo.state === "notfound" ? "To be confirmed" : "Calculated after entering address")
       : !q ? "Calculating…" : q.outside ? "To be confirmed" : rupee(q.charge);
-    const ad = $("[data-addons-total]", o);
-    if (ad) ad.textContent = rupee(addonsTotal());
     const gt = $("[data-grand]", o);
     if (gt) gt.textContent = rupee(grandTotal());
     const gb = $("[data-grand-btn]", o);
@@ -812,6 +838,7 @@
           <div class="cart-item__info">
             <p class="cart-item__name">${esc(item.name)}</p>
             <p class="cart-item__opts">${esc(opts)}</p>
+            ${lineAddons(l).map((a) => `<p class="cart-item__addon">+ ${esc(a.name)}${a.qty > 1 ? ` × ${a.qty}` : ""}${a.message ? ` “${esc(a.message)}”` : ""} <b>${rupee(a.total)}</b></p>`).join("")}
             <div class="cart-item__row">
               <div class="qty qty--sm"><button type="button" data-line="${i}" data-d="-1" aria-label="Decrease">−</button><span>${l.qty}</span><button type="button" data-line="${i}" data-d="1" aria-label="Increase">+</button></div>
               <b>${rupee(total)}</b>
@@ -829,7 +856,7 @@
     const body = `
       ${items}
       <div class="summary summary--sub"><span>Item total</span><span>${rupee(cartTotal())}</span></div>
-      ${m.gift ? `<div class="summary summary--sub"><span>Add-ons</span><span data-addons-total>${rupee(addonsTotal())}</span></div>` : ""}
+      ${addonsTotal() ? `<div class="summary summary--sub"><span>Add-ons</span><span>${rupee(addonsTotal())}</span></div>` : ""}
       ${m.needsAddress ? `<div class="summary summary--sub"><span>Delivery charges</span><span data-delivery></span></div>` : ""}
       <div class="summary"><span>Total</span><span data-grand>${rupee(grandTotal())}</span></div>
       ${D.kitchens[state.city] && D.kitchens[state.city].address ? `
@@ -850,10 +877,14 @@
             <textarea id="f-address" name="address" autocomplete="street-address" placeholder="${m.gift ? "Recipient's house / street, area" : "Or type your house / street, area"}" required>${esc(details.address || "")}</textarea>
           </div>
           ${f("landmark", "Flat / landmark / pincode")}
-          <p class="loc-info"></p>` : ""}
+          <p class="loc-info"></p>
+          ${D.vip ? `
+          <button type="button" class="vip" data-vip aria-pressed="${!!details.vip}">
+            <span class="vip__text"><b>${esc(D.vip.name)}</b><small>${esc(D.vip.tagline)}</small></span>
+            <span class="vip__price">${rupee(D.vip.price)}<small>${details.vip ? "Selected" : "Upgrade"}</small></span>
+          </button>` : ""}` : ""}
         ${f("date", m.needsAddress ? "Delivery date" : "Pick-up date", "date", `min="${minDate()}" required`)}
         <div class="field"><label>${m.needsAddress ? "Delivery slot" : "Pick-up slot"}</label><div data-slots>${slotsHtml()}</div></div>
-        ${m.gift ? addonsHtml() : ""}
         ${f("note", "Anything else? (allergies, occasion…)", "textarea")}
         <p class="error hidden" data-error></p>
       </form>`;
@@ -864,13 +895,6 @@
       if (e.target.name) { details[e.target.name] = e.target.value; store.set("details", details); }
       if (e.target.name === "address" || e.target.name === "landmark") addressEdited(o, false, e.target.name);
       if (e.target.name === "date") $("[data-slots]", o).innerHTML = slotsHtml();
-      const at = e.target.dataset && e.target.dataset.addonText;
-      if (at) {
-        details.addonText[at] = e.target.value;
-        store.set("details", details);
-        const c = e.target.nextElementSibling;
-        if (c) c.textContent = `${e.target.value.length}/${e.target.maxLength} characters`;
-      }
     });
     if (m.needsAddress) {
       updateDeliveryUI(o);
@@ -887,23 +911,20 @@
     }
     o.addEventListener("click", (e) => {
       if (e.target.closest("[data-loc-gps]")) { useMyLocation(o); return; }
+      const vip = e.target.closest("[data-vip]");
+      if (vip) {
+        details.vip = !details.vip;
+        store.set("details", details);
+        $(".vip__price small", vip).textContent = details.vip ? "Selected" : "Upgrade";
+        updateDeliveryUI(o);
+        if (details.vip && D.vip.chosen) toast(D.vip.chosen);
+        return;
+      }
       const slot = e.target.closest("[data-slot]");
       if (slot) {
         details.time = slot.dataset.slot;
         store.set("details", details);
         $$("[data-slot]", o).forEach((b) => b.setAttribute("aria-pressed", b === slot));
-        return;
-      }
-      const ad = e.target.closest("[data-ad]");
-      if (ad) {
-        const a = ADDONS.find((x) => x.id === ad.dataset.addon);
-        details.addons[a.id] = Math.max(0, Math.min(a.maxQty || 1, (details.addons[a.id] || 0) + +ad.dataset.ad));
-        store.set("details", details);
-        const box = $(".addons", o);
-        box.outerHTML = addonsHtml();
-        updateDeliveryUI(o);
-        const input = $(`[data-addon-text="${a.id}"]`, o);
-        if (input && +ad.dataset.ad > 0) input.focus();
         return;
       }
       const d = e.target.closest("[data-d]");
@@ -948,23 +969,26 @@
 
   function buildMessage(orderId) {
     const m = S.modes[state.mode];
-    const lines = state.cart.map((l, i) => {
+    const lines = state.cart.flatMap((l, i) => {
       const { item, opts, total } = lineText(l);
-      return `${i + 1}. ${item.name} (${opts}) × ${l.qty} = ${rupee(total)}`;
+      return [
+        `${i + 1}. ${item.name} (${opts}) × ${l.qty} = ${rupee(total)}`,
+        ...lineAddons(l).map((a) => `   + ${a.name}${a.qty > 1 ? ` × ${a.qty}` : ""}${a.message ? ` ("${a.message}")` : ""} = ${rupee(a.total)}`)
+      ];
     });
     const out = [
       `Hi ${S.name}! I'd like to place an order 🍪`,
       ...(orderId ? [`Order ID: ${orderId}`] : []),
       "",
       ...lines,
-      ...addonLines().map((a) => `+ ${a.name}${a.qty > 1 ? ` × ${a.qty}` : ""}${a.message ? ` ("${a.message}")` : ""} = ${rupee(a.total)}`),
       "",
       `Item total: ${rupee(cartTotal())}`
     ];
-    if (addonLines().length) out.push(`Add-ons: ${rupee(addonsTotal())}`);
+    if (addonsTotal()) out.push(`Add-ons: ${rupee(addonsTotal())}`);
     const q = deliveryQuote();
     if (m.needsAddress) {
-      if (!q) out.push("Delivery: to be confirmed (address not found on the map)");
+      if (q && q.vip) out.push(`Delivery: ${D.vip.name} = ${rupee(q.charge)}`);
+      else if (!q) out.push("Delivery: to be confirmed (address not found on the map)");
       else {
         const dist = `${q.km.toFixed(1)} km${details.kmSource === "approx" ? " (approx.)" : ""}`;
         out.push(q.outside
@@ -998,16 +1022,16 @@
     const m = S.modes[state.mode];
     const q = m.needsAddress ? deliveryQuote() : null;
     const payload = {
-      items: [
-        ...state.cart.map((l) => {
-          const { item, opts, total } = lineText(l);
-          return { name: item.name, options: opts, qty: l.qty, price: total };
-        }),
-        // Gift add-ons travel as their own lines so the dashboard and order page list them.
-        ...addonLines().map((a) => ({ name: `Add-on: ${a.name}`, options: a.message ? `“${a.message}”` : "", qty: a.qty, price: a.total }))
-      ],
+      // Add-ons travel as their own lines, right after their product, so the dashboard and order page list them.
+      items: state.cart.flatMap((l) => {
+        const { item, opts, total } = lineText(l);
+        return [
+          { name: item.name, options: opts, qty: l.qty, price: total },
+          ...lineAddons(l).map((a) => ({ name: `Add-on: ${a.name}`, options: a.message ? `“${a.message}”` : "", qty: a.qty, price: a.total }))
+        ];
+      }),
       subtotal: cartTotal() + addonsTotal(),
-      delivery: q ? { km: +q.km.toFixed(1), charge: q.charge, outside: q.outside } : m.needsAddress ? { km: 0, charge: null, outside: false } : null,
+      delivery: q ? { km: q.km != null ? +q.km.toFixed(1) : 0, charge: q.charge, outside: q.outside, vip: !!q.vip } : m.needsAddress ? { km: 0, charge: null, outside: false } : null,
       total: grandTotal(),
       city: state.city,
       mode: state.mode,
@@ -1018,7 +1042,7 @@
       loc: m.needsAddress ? details.loc || null : null,
       date: details.date,
       time: details.time,
-      giftNote: (addonLines().find((a) => a.id === "note") || {}).message || "",
+      giftNote: allAddons().filter((a) => a.id === "note" && a.message).map((a) => a.message).join(" / "),
       note: details.note
     };
     try {
@@ -1103,7 +1127,6 @@
     else if (details.date < minDate()) missing.push(`a date from ${fmtDate(minDate())}`);
     else if (!details.time || !allSlots().includes(details.time)) missing.push("a time slot");
     else if (!slotOpen(details.date, details.time)) missing.push(`a later time slot (we need about ${(S.orderInfo && S.orderInfo.prepHours) || 2} hours to prepare)`);
-    addonLines().filter((a) => a.text && !a.message).forEach((a) => missing.push(`the text for your ${a.name.toLowerCase()}`));
     if (missing.length) {
       err.textContent = "Please add " + missing.join(", ") + ".";
       err.classList.remove("hidden");
@@ -1166,7 +1189,7 @@
     return `
       ${rows}
       <div class="summary summary--sub"><span>Subtotal</span><span>${rupee(o.subtotal)}</span></div>
-      ${d ? `<div class="summary summary--sub"><span>Delivery${d.km ? ` (${d.km} km)` : ""}</span><span>${d.charge == null ? "To be confirmed" : rupee(d.charge)}</span></div>` : ""}
+      ${d ? `<div class="summary summary--sub"><span>${d.vip && S.delivery.vip ? esc(S.delivery.vip.name) : `Delivery${d.km ? ` (${d.km} km)` : ""}`}</span><span>${d.charge == null ? "To be confirmed" : rupee(d.charge)}</span></div>` : ""}
       <div class="summary"><span>${o.finalTotal != null ? "Final total" : "Total"}</span><span>${rupee(orderTotal(o))}</span></div>
       <dl class="track-meta">
         <div><dt>${pickup ? "Pick-up" : "Delivery"}</dt><dd>${esc(fmtDate(o.date))}${o.time ? " · " + esc(slotLabel(o.time)) : ""} · ${esc(o.city)}</dd></div>
