@@ -45,12 +45,24 @@ function orderAlert(o, siteUrl) {
   return sections.map((lines) => lines.filter(Boolean).join("\n")).filter(Boolean).join("\n\n");
 }
 
-async function sendOrderAlert(order, siteUrl) {
+async function sendText(text) {
   if (!configured()) return false;
-  const q = new URLSearchParams({ phone: PHONE, text: orderAlert(order, siteUrl), apikey: KEY });
+  const q = new URLSearchParams({ phone: PHONE, text, apikey: KEY });
   const res = await fetch(`https://api.callmebot.com/whatsapp.php?${q}`);
   if (!res.ok) throw new Error(`WhatsApp alert failed: ${res.status}`);
   return true;
 }
+const sendOrderAlert = (order, siteUrl) => sendText(orderAlert(order, siteUrl));
 
-module.exports = { configured, sendOrderAlert, orderAlert };
+// Payment alerts: "paying" when the customer opens their UPI app, "submitted" when they send the transaction ID.
+function paymentAlert(kind, o, amount, siteUrl) {
+  const who = `${o.customer.name} (${o.customer.phone})`;
+  const lines = kind === "paying"
+    ? [`💳 *${who} is paying ${rupee(amount)}* for order ${o.id} right now.`, "Keep GPay open to check it arrives."]
+    : [`✅ *Payment submitted* for order ${o.id}`, `${rupee(amount)} from ${who}`, `Ref / UTR: *${o.payment.ref}*`, "Check GPay, then tap “Mark as paid” on the dashboard."];
+  if (siteUrl) lines.push("", `Dashboard: ${siteUrl}/admin.html`);
+  return lines.join("\n");
+}
+const sendPaymentAlert = (kind, order, amount, siteUrl) => sendText(paymentAlert(kind, order, amount, siteUrl));
+
+module.exports = { configured, sendOrderAlert, sendPaymentAlert, orderAlert, paymentAlert };

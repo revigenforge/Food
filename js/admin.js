@@ -27,6 +27,8 @@
   let filter = "active";
   let knownNew = null;
   let timer = null;
+  let seen = null; // last snapshot, to spot new orders and payments between refreshes
+  const POLL_MS = 10000;
   const root = () => $("#admin");
 
   async function api(method, body) {
@@ -63,19 +65,84 @@
     $("#pw").focus();
   }
 
+  /* ---------- Live alerts: sound, vibration, phone notification ---------- */
+  let audio = null;
+  function unlockAlerts(askPermission) {
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state === "suspended") audio.resume();
+    } catch (e) { /* no sound support */ }
+    if (askPermission && "Notification" in window && Notification.permission === "default") Notification.requestPermission().then(renderAlertBar);
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+    renderAlertBar();
+  }
+  const alertsReady = () => audio && audio.state === "running" && (!("Notification" in window) || Notification.permission !== "default");
+  function renderAlertBar() {
+    const bar = $("[data-alert-bar]");
+    if (bar) bar.classList.toggle("hidden", alertsReady());
+  }
+  function beep() {
+    if (!audio || audio.state !== "running") return;
+    [880, 1320].forEach((f, i) => {
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.frequency.value = f;
+      o.connect(g); g.connect(audio.destination);
+      const t = audio.currentTime + i * 0.18;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.4, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+      o.start(t); o.stop(t + 0.17);
+    });
+  }
+  async function notifyPhone(title, body, tag) {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    const opts = { body, tag, icon: "assets/img/logo.png", badge: "assets/img/favicon.png", data: { url: location.href }, renotify: true };
+    try {
+      const reg = "serviceWorker" in navigator && (await navigator.serviceWorker.getRegistration());
+      if (reg) reg.showNotification(title, opts);
+      else new Notification(title, opts);
+    } catch (e) { /* not supported */ }
+  }
+  // Compare with the previous refresh and announce anything new.
+  function announce(list) {
+    const snap = new Map(list.map((o) => [o.id, { status: o.status, pay: paymentOf(o).status, intentAt: paymentOf(o).intentAt || 0 }]));
+    if (seen) {
+      const events = [];
+      list.forEach((o) => {
+        const was = seen.get(o.id), pay = paymentOf(o), who = o.customer.name;
+        if (!was) events.push({ id: o.id, title: "🍪 New order", body: `${who} · ${rupee(orderTotal(o))} · ${fmtDate(o.date)}${o.time ? ", " + slotLabel(o.time) : ""}` });
+        else if (pay.status === "submitted" && was.pay !== "submitted") events.push({ id: o.id, title: "✅ Payment submitted", body: `${who} · ${rupee(amountDue(o))} · Ref ${pay.ref}. Check GPay and mark as paid.` });
+        else if (pay.status === "unpaid" && (pay.intentAt || 0) > was.intentAt) events.push({ id: o.id, title: "💳 Paying now", body: `${who} is paying ${rupee(amountDue(o))} for ${o.id}` });
+      });
+      if (events.length) {
+        beep();
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+        events.forEach((ev) => notifyPhone(ev.title, ev.body, ev.id));
+        toast(`${events[0].title}: ${events[0].body}`);
+        setTimeout(() => events.forEach((ev) => { const c = document.getElementById("ad-" + ev.id); if (c) c.classList.add("flash"); }), 50);
+      }
+    }
+    seen = snap;
+  }
+  const payingNow = (o) => paymentOf(o).status === "unpaid" && paymentOf(o).intentAt && Date.now() - paymentOf(o).intentAt < 15 * 60 * 1000;
+
   /* ---------- Data ---------- */
   async function load(fromLogin) {
     try {
       const data = await api("GET");
       if (fromLogin) store.set("admin_pw", password);
+      const changed = JSON.stringify(data.orders || []) !== JSON.stringify(orders);
       orders = data.orders || [];
+      announce(orders);
       const newCount = orders.filter((o) => o.status === "placed").length;
       if (knownNew !== null && newCount > knownNew) toast(`${newCount - knownNew} new order${newCount - knownNew > 1 ? "s" : ""}!`);
       knownNew = newCount;
       document.title = `${newCount ? `(${newCount}) ` : ""}Orders · ${S.name}`;
-      render();
+      // Don't redraw while Zeen is typing a note or total, or when nothing changed.
+      const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest("#admin input, #admin textarea");
+      if ((changed || fromLogin || !$(".ad-list")) && !typing) render();
       clearInterval(timer);
-      timer = setInterval(() => { if (!document.hidden) load(); }, 30000);
+      timer = setInterval(() => { if (!document.hidden) load(); }, POLL_MS);
     } catch (e) {
       if (e.status === 401 || e.status === 429) {
         store.set("admin_pw", "");
@@ -92,6 +159,7 @@
       if (calendar === "removed") okMsg += " · Removed from Google Calendar";
       if (calendar === "failed") okMsg += " · Couldn't update Google Calendar";
       orders = orders.map((o) => (o.id === id ? order : o));
+      if (seen) seen.set(order.id, { status: order.status, pay: paymentOf(order).status, intentAt: paymentOf(order).intentAt || 0 });
       knownNew = orders.filter((o) => o.status === "placed").length;
       render();
       const card = document.getElementById("ad-" + id);
@@ -175,7 +243,7 @@
     const due = rupee(amountDue(o));
     return `
       <div class="ad-pay ad-pay--${pay.status}">
-        <span class="status-pill status-pill--pay-${pay.status}">${icon(pay.status === "paid" ? "check" : "upi")}${PAY_LABEL[pay.status] || pay.status}</span>
+        <span class="status-pill status-pill--pay-${payingNow(o) ? "paying" : pay.status}">${icon(pay.status === "paid" ? "check" : "upi")}${payingNow(o) ? "Paying now…" : PAY_LABEL[pay.status] || pay.status}</span>
         <span class="ad-pay__info">${due}${pay.ref ? ` · Ref <b>${esc(pay.ref)}</b>` : ""}</span>
         ${pay.status === "paid"
           ? `<button class="link" type="button" data-pay="unpaid">Undo</button>`
@@ -268,6 +336,7 @@
     const counts = Object.fromEntries(FILTERS.map(([k, , fn]) => [k, orders.filter(fn).length]));
     const list = orders.filter(FILTERS.find((f) => f[0] === filter)[2]);
     root().innerHTML = `
+      <button type="button" class="alert-bar${alertsReady() ? " hidden" : ""}" data-alert-bar>${icon("bell")} Tap to turn on sound &amp; notifications for new orders and payments</button>
       <nav class="tabs ad-tabs" role="tablist">
         ${FILTERS.map(([k, label]) => `<button class="tab" role="tab" data-filter="${k}" aria-selected="${k === filter}">${label} <span>${counts[k]}</span></button>`).join("")}
       </nav>
@@ -281,6 +350,8 @@
 
   /* ---------- Events ---------- */
   document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-alert-bar]")) { unlockAlerts(true); toast("Alerts are on. Keep this page open."); return; }
+    if (!audio || audio.state !== "running") unlockAlerts(); // any tap enables sound
     const f = e.target.closest("[data-filter]");
     if (f) { filter = f.dataset.filter; render(); return; }
     const card = e.target.closest("[data-id]");
@@ -321,5 +392,6 @@
     });
     if (password) load();
     else showLogin();
+    document.addEventListener("visibilitychange", () => { if (!document.hidden && password) load(); });
   });
 })();

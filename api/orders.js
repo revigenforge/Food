@@ -1,5 +1,6 @@
 // POST /api/orders                                 → create an order from the checkout (public)
 // POST /api/orders { action: "payment", id, ref }  → customer submits their UPI transaction ID
+// POST /api/orders { action: "paying", id, amount } → customer opened their UPI app (alerts Zeen)
 // GET  /api/orders?id=…                            → order status page data (public, by unguessable id)
 const { HttpError, newId, getOrder, saveOrder, allow, send, handle } = require("./_lib/store");
 const calendar = require("./_lib/calendar");
@@ -67,7 +68,33 @@ function publicView(o) {
 
 const PAYABLE = ["placed", "confirmed", "baking", "ready", "completed"];
 
-async function submitPayment(res, body) {
+const siteOf = (req) => { const h = req.headers["x-forwarded-host"] || req.headers.host; return h ? `https://${h}` : ""; };
+
+// WhatsApp payment alert to Zeen; waits at most 4 s and never fails the request.
+async function alertPayment(kind, order, amount, req) {
+  if (!notify.configured()) return;
+  try {
+    await Promise.race([notify.sendPaymentAlert(kind, order, amount, siteOf(req)), new Promise((r) => setTimeout(r, 4000))]);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+// The customer tapped Pay / opened the QR: flag the order on the dashboard and alert Zeen (at most every 3 minutes).
+async function payingNow(res, body, req) {
+  const order = await getOrder(str(body.id, 20).toUpperCase());
+  if (!order) throw new HttpError(404, "We couldn't find that order.");
+  const payment = order.payment || { status: "unpaid", ref: "" };
+  if (!PAYABLE.includes(order.status) || payment.status !== "unpaid") return send(res, 200, { ok: true });
+  const now = Date.now();
+  if (payment.intentAt && now - payment.intentAt < 3 * 60 * 1000) return send(res, 200, { ok: true });
+  order.payment = { ...payment, intentAt: now };
+  await saveOrder(order, false);
+  await alertPayment("paying", order, num(body.amount) || order.total, req);
+  return send(res, 200, { ok: true });
+}
+
+async function submitPayment(res, body, req) {
   const order = await getOrder(str(body.id, 20).toUpperCase());
   if (!order) throw new HttpError(404, "We couldn't find that order.");
   const ref = str(body.ref, 40).replace(/\s+/g, "");
@@ -76,9 +103,11 @@ async function submitPayment(res, body) {
   const payment = order.payment || { status: "unpaid", ref: "" };
   if (payment.status === "paid") throw new HttpError(400, "This order is already marked as paid.");
   const now = Date.now();
+  const resubmit = payment.status === "submitted" && payment.ref === ref;
   order.payment = { ...payment, status: "submitted", ref, submittedAt: now };
   order.updatedAt = now;
   await saveOrder(order, false);
+  if (!resubmit) await alertPayment("submitted", order, num(body.amount) || (order.finalTotal != null ? order.finalTotal : order.total), req);
   return send(res, 200, publicView(order));
 }
 
@@ -106,7 +135,8 @@ module.exports = (req, res) => handle(res, async () => {
     const ip = str((req.headers["x-forwarded-for"] || "").split(",")[0], 60) || "unknown";
     if (!(await allow(`order:${ip}`, 10, 600))) throw new HttpError(429, "Too many orders from this device. Please message us directly.");
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
-    if (body.action === "payment") return submitPayment(res, body);
+    if (body.action === "payment") return submitPayment(res, body, req);
+    if (body.action === "paying") return payingNow(res, body, req);
     const now = Date.now();
     const order = {
       id: newId(),

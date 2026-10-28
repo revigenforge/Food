@@ -1229,6 +1229,8 @@
       if (e.target.closest("[data-refresh]")) { load(); toast("Updated"); }
       const c = e.target.closest("[data-copy-text]");
       if (c) navigator.clipboard.writeText(c.dataset.copyText).then(() => toast("UPI ID copied"), () => prompt("UPI ID:", c.dataset.copyText));
+      // Opening the UPI app, copying the UPI ID or showing the QR = about to pay: let Zeen know.
+      if (last && (e.target.closest(".btn--upi") || c || (e.target.closest(".pay__more summary") && !e.target.closest(".pay--submitted")))) signalPaying(last);
     });
     root.addEventListener("submit", async (e) => {
       const form = e.target.closest("[data-pay-form]");
@@ -1241,7 +1243,7 @@
         const res = await fetch("api/orders", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "payment", id, ref: form.ref.value })
+          body: JSON.stringify({ action: "payment", id, ref: form.ref.value, amount: last ? amountDue(last) : undefined })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Couldn't submit. Please try again.");
@@ -1268,6 +1270,18 @@
   function upiLink(o) {
     const q = new URLSearchParams({ pa: P.upiId, pn: P.payeeName || S.name, am: amountDue(o).toFixed(2), cu: "INR", tn: `${S.name} ${o.id}` });
     return "upi://pay?" + q.toString().replace(/\+/g, "%20").replace(/%40/g, "@");
+  }
+
+  let payingSent = 0;
+  function signalPaying(o) {
+    if (Date.now() - payingSent < 3 * 60 * 1000 || paymentOf(o).status !== "unpaid" || !canPay(o)) return;
+    payingSent = Date.now();
+    fetch("api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "paying", id: o.id, amount: amountDue(o) }),
+      keepalive: true // the page may switch to the UPI app straight away
+    }).catch(() => {});
   }
 
   function loadScript(src) {
