@@ -833,7 +833,7 @@
       ${m.needsAddress ? `<div class="summary summary--sub"><span>Delivery charges</span><span data-delivery></span></div>` : ""}
       <div class="summary"><span>Total</span><span data-grand>${rupee(grandTotal())}</span></div>
       ${D.kitchens[state.city] && D.kitchens[state.city].address ? `
-        <div class="store-addr">${icon("pin")}<div><b>Store address · ${esc(state.city)}</b><span>${esc(D.kitchens[state.city].address)}</span></div></div>` : ""}
+        <div class="store-addr">${icon("pin")}<div><b>Store address · ${esc(state.city)}</b><span>${esc(D.kitchens[state.city].address)}</span>${D.kitchens[state.city].mapUrl ? `<a class="store-addr__map" href="${esc(D.kitchens[state.city].mapUrl)}" target="_blank" rel="noopener">${icon("external")} Get directions</a>` : ""}</div></div>` : ""}
       <p class="fine">${m.needsAddress
         ? `Delivery charges are calculated after entering the address, based on distance (within ${D.maxKm} km).`
         : "Pick it up yourself, or arrange your own delivery (Porter, Rapido, etc.) from our store."} Prices are confirmed when we accept your order.${P.upiId ? ` Pay by UPI ${P.payAfter === "placed" ? "on your order page" : "once your order is confirmed"}.` : ""}</p>

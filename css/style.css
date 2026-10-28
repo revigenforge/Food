@@ -913,3 +913,5 @@ body[data-page="admin"] main { padding-top: 6px; max-width: 760px; }
   .card__media .card__img { height: 118px; }
 }
 .card__media { align-self: flex-start; }
+.store-addr__map { display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; color: var(--rose-dark); font-weight: 600; text-decoration: none; }
+.store-addr__map svg { width: 14px; height: 14px; margin: 0; }
