@@ -65,7 +65,7 @@ window.SITE = {
     roadFactor: 1.3, // used to estimate road distance when the routing service is unreachable
     kitchens: {
       // mapUrl: Google Maps link for the "Get directions" button at checkout.
-      Chennai: { lat: 13.0827, lng: 80.2707, address: "Store address in Chennai (to be added)", mapUrl: "https://maps.app.goo.gl/AHqKM5unfGteLCxR8" },
+      Chennai: { lat: 13.080219, lng: 80.252131, address: "Abu VSR Castle Apartment, Purasaiwakkam, Chennai – 600084", mapUrl: "https://maps.app.goo.gl/AHqKM5unfGteLCxR8" },
       Bengaluru: { lat: 12.9716, lng: 77.5946, address: "Store address in Bengaluru (to be added)", mapUrl: "https://maps.app.goo.gl/TMRqmbko6B48u9ok8" }
     }
   },
