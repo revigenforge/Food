@@ -15,8 +15,8 @@ window.SITE = {
   instagram: "sweetlyyours.byzeen",
   // WhatsApp number with country code, digits only (e.g. "919876543210").
   // Leave empty to send orders through Instagram DM instead.
-  whatsapp: "",
-  phone: "",
+  whatsapp: "917904767684",
+  phone: "+91 79047 67684",
   email: "",
 
   cities: ["Chennai", "Bengaluru"],
@@ -88,8 +88,8 @@ window.SITE = {
    * advancePercent: 100 = full amount, 50 = half as advance, etc.
    */
   payment: {
-    upiId: "REPLACE-WITH-UPI-ID",
-    payeeName: "Sweetly Yours",
+    upiId: "shehzeenkhatija@oksbi",
+    payeeName: "Shehzeen Khatija", // should match the name on the UPI account
     qrImage: "",
     payAfter: "confirmed",
     advancePercent: 100
