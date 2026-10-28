@@ -32,7 +32,7 @@ The delivery charge, total and a Google Maps link to the pin are included in the
 - Road distance: the public OSRM routing service. If it can't be reached, the site estimates the distance as the straight-line distance × `roadFactor` and marks it "approx."
 - Beyond `maxKm`, the order can still be sent and the delivery charge is marked "to be confirmed".
 
-Configure it under `delivery` in `js/config.js`; each kitchen's `address` is shown as the store address at checkout. **Set the real kitchen coordinates**: in Google Maps, long-press the kitchen and copy the `lat, lng` numbers shown.
+Configure it under `delivery` in `js/config.js`; each kitchen's `address` is shown as the store address at checkout, with a **Get directions** link (`mapUrl`). To move a kitchen: in Google Maps, long-press it and copy the `lat, lng` numbers shown.
 
 The cart and the customer's details are saved in the browser (localStorage), so nothing is stored on a server.
 

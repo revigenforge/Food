@@ -52,8 +52,8 @@ window.SITE = {
    * Distance is rounded up to the next km (6.4 km → 7 km). Beyond the last slab
    * (maxKm) the charge is "to be confirmed" on chat.
    * Kitchens: the pick-up / dispatch point in each city, shown as the store address
-   * at checkout. The coordinates and addresses below are PLACEHOLDERS. In Google Maps,
-   * long-press the kitchen, copy the "lat, lng" numbers and paste them here.
+   * at checkout. To change one: in Google Maps, long-press the kitchen, copy the
+   * "lat, lng" numbers and paste them here.
    */
   delivery: {
     slabs: [
@@ -66,7 +66,7 @@ window.SITE = {
     kitchens: {
       // mapUrl: Google Maps link for the "Get directions" button at checkout.
       Chennai: { lat: 13.080219, lng: 80.252131, address: "Abu VSR Castle Apartment, Purasaiwakkam, Chennai – 600084", mapUrl: "https://maps.app.goo.gl/AHqKM5unfGteLCxR8" },
-      Bengaluru: { lat: 12.9716, lng: 77.5946, address: "Store address in Bengaluru (to be added)", mapUrl: "https://maps.app.goo.gl/TMRqmbko6B48u9ok8" }
+      Bengaluru: { lat: 12.999123, lng: 77.600936, address: "Naimah Residency, Benson Town, Bengaluru – 560046", mapUrl: "https://maps.app.goo.gl/TMRqmbko6B48u9ok8" }
     }
   },
 
