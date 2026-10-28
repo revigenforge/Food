@@ -3,6 +3,7 @@
 // GET  /api/orders?id=…                            → order status page data (public, by unguessable id)
 const { HttpError, newId, getOrder, saveOrder, allow, send, handle } = require("./_lib/store");
 const calendar = require("./_lib/calendar");
+const notify = require("./_lib/notify");
 
 // New orders go straight into Zeen's Google Calendar (when configured). A slow or failing
 // calendar never holds up the customer's order.
@@ -81,6 +82,20 @@ async function submitPayment(res, body) {
   return send(res, 200, publicView(order));
 }
 
+// WhatsApp alert to Zeen. Waits at most 4 s and never fails the customer's order.
+async function alertOwner(order, req) {
+  if (!notify.configured()) return;
+  const host = req.headers["x-forwarded-host"] || req.headers.host;
+  try {
+    await Promise.race([
+      notify.sendOrderAlert(order, host ? `https://${host}` : ""),
+      new Promise((resolve) => setTimeout(resolve, 4000))
+    ]);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
 module.exports = (req, res) => handle(res, async () => {
   if (req.method === "GET") {
     const order = await getOrder(str(req.query.id, 20).toUpperCase());
@@ -106,6 +121,7 @@ module.exports = (req, res) => handle(res, async () => {
     };
     await addToCalendar(order, req);
     await saveOrder(order, true);
+    await alertOwner(order, req);
     return send(res, 201, { id: order.id });
   }
   res.setHeader("Allow", "GET, POST");

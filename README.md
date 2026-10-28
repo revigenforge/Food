@@ -71,7 +71,16 @@ Until `upiId` is a real UPI ID, the order page says online payment isn't active 
 - OG Cookie Pie lets customers mix flavours: up to `flavours` per size (Couples 2, Family 3, Celebration 3). Adding Nutella (a `premium` flavour) switches to the size's `premiumPrice`.
 - Items can be limited to some cities (`cities`; Bengaluru only has the OG Cookie Pie) and can have several photos (`images`).
 
-### Google Calendar
+### WhatsApp alert for new orders
+
+Every new order sends Zeen a WhatsApp message (items, total, slot, customer, address, map link, dashboard link) through
+[CallMeBot](https://www.callmebot.com/blog/free-api-whatsapp-messages/), a free service for alerts to your own number.
+If CallMeBot is slow or down, the order is still saved.
+
+1. On Zeen's phone: follow CallMeBot's WhatsApp instructions (save their number, send them the activation message) and note the **API key** they reply with.
+2. In Vercel → Environment Variables: `OWNER_WHATSAPP` = his number with country code (e.g. `919876543210`), `CALLMEBOT_APIKEY` = the key. Redeploy.
+
+### Google Calendar (optional)
 
 On the dashboard every confirmed order has **Add to Google Calendar** (one tap, no setup).
 
