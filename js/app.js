@@ -1249,7 +1249,9 @@
         if (!res.ok) throw new Error(data.error || "Couldn't submit. Please try again.");
         last = data;
         renderOrder(root, data);
-        toast("Thanks! Zeen will verify your payment shortly");
+        toast("Thanks! Now tap “Send payment confirmation” to let Zeen know");
+        const tell = $(".pay--submitted .btn", root);
+        if (tell) tell.scrollIntoView({ behavior: "smooth", block: "center" });
       } catch (ex) {
         err.textContent = ex.message;
         err.classList.remove("hidden");
@@ -1314,8 +1316,14 @@
         <p class="error hidden" data-pay-error></p>
       </form>`;
     if (pay.status === "submitted") {
+      // One tap to tell Zeen on WhatsApp (or Instagram) that the payment is done.
+      const msg = `Hi ${S.name}! I've paid ${rupee(amt)} for order ${o.id}.\nUPI ref / UTR: ${pay.ref}\n${trackUrl(o.id)}`;
+      const tell = S.whatsapp
+        ? `<a class="btn btn--wa" href="https://wa.me/${S.whatsapp}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${icon("whatsapp")} Send payment confirmation on WhatsApp</a>`
+        : `<a class="btn btn--ig" href="${igDm}" target="_blank" rel="noopener">${icon("instagram")} Tell us on Instagram</a>`;
       return `<section class="pay pay--submitted">
-        <div class="pay__head">${icon("clock")}<div><h2>Payment submitted</h2><p>${label} · Ref <b>${esc(pay.ref)}</b><br>Zeen will verify it shortly.</p></div></div>
+        <div class="pay__head">${icon("clock")}<div><h2>Payment submitted</h2><p>${label} · Ref <b>${esc(pay.ref)}</b><br>Send us a quick confirmation so Zeen can verify it right away.</p></div></div>
+        ${tell}
         <details class="pay__more"><summary>Entered the wrong ID?</summary>${refForm("Correct transaction ID")}</details>
       </section>`;
     }
