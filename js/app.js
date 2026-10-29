@@ -34,6 +34,7 @@
     refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
     copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
     logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+    locate: '<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/>',
     upi: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M7 15h3"/>',
     external: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
     heart: '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>'
@@ -705,11 +706,7 @@
     if (info) {
       if (status) info.innerHTML = status;
       else if (q && q.vip) info.textContent = "👑 The owner will deliver this one himself.";
-      else if (!details.loc) info.textContent = geo.state === "searching"
-        ? "Finding the address…"
-        : geo.state === "notfound"
-          ? "We couldn't find this address on the map. Tap “Use my current location”, or place the order and we'll confirm the delivery charge on chat."
-          : "Enter the address, or tap “Use my current location”, to calculate the delivery charge.";
+      else if (!details.loc) info.textContent = "Search your area and pick it from the list, or use My Location / Pin on Map, to calculate the delivery charge.";
       else if (!q) info.textContent = "Calculating distance…";
       else {
         const dist = `${details.kmSource === "approx" ? "~" : ""}${q.km.toFixed(1)} km${details.kmSource === "road" ? " by road" : " (approx.)"}`;
@@ -722,7 +719,7 @@
     const vipBox = $("[data-vip]", o);
     if (vipBox) vipBox.setAttribute("aria-pressed", !!(q && q.vip));
     if (dl) dl.textContent = q && q.vip ? rupee(q.charge) : !details.loc
-      ? (geo.state === "searching" ? "Calculating…" : geo.state === "notfound" ? "To be confirmed" : "Calculated after entering address")
+      ? "Calculated after entering address"
       : !q ? "Calculating…" : q.outside ? "To be confirmed" : rupee(q.charge);
     const gt = $("[data-grand]", o);
     if (gt) gt.textContent = rupee(grandTotal());
@@ -735,7 +732,6 @@
     details.loc = loc;
     details.locFrom = opts.from || details.locFrom || "address";
     details.km = null;
-    geo.state = null;
     store.set("details", details);
     updateDeliveryUI(o);
     const city = state.city;
@@ -744,67 +740,71 @@
     Object.assign(details, { km: r.km, kmSource: r.source, kmFor: city });
     store.set("details", details);
     updateDeliveryUI(o);
-    if (opts.fillAddress !== false && !details.address.trim()) reverseGeocode(o, loc);
+    if (opts.fillAddress !== false) reverseGeocode(o, loc);
   }
 
+  // After My Location / Pin on Map: fill in the area and pincode for the customer.
   async function reverseGeocode(o, loc) {
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${loc.lat}&lon=${loc.lng}&zoom=18`);
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat=${loc.lat}&lon=${loc.lng}&zoom=18`);
       const data = await res.json();
-      const ta = $("#f-address", o);
-      if (data.display_name && ta && !ta.value.trim() && details.loc === loc) {
-        ta.value = data.display_name;
-        details.address = data.display_name;
-        store.set("details", details);
-      }
-    } catch (e) { /* address stays manual */ }
+      if (details.loc !== loc || !data.address) return;
+      const ad = data.address;
+      const area = [ad.neighbourhood || ad.suburb || ad.quarter || ad.residential || ad.road, ad.city_district || ad.suburb, ad.city || ad.town || ad.county]
+        .filter((x, i, arr) => x && arr.indexOf(x) === i).join(", ");
+      const set = (name, value) => {
+        const el = $(`[name="${name}"]`, o);
+        if (!value || !el) return;
+        el.value = value;
+        details[name] = value;
+      };
+      set("area", area);
+      if (/^\d{6}$/.test((ad.postcode || "").replace(/\s/g, ""))) set("pincode", ad.postcode.replace(/\s/g, ""));
+      if (!details.address.trim() && ad.house_number && ad.road) set("address", `${ad.house_number}, ${ad.road}`);
+      store.set("details", details);
+    } catch (e) { /* customer fills it in */ }
   }
 
-  /* Delivery charge from the typed address: look the address up (then its pincode, area or
-     landmark) on OpenStreetMap, near the kitchen, and use the first match. */
-  const geo = { state: null, run: 0, timer: null };
-  async function nominatim(params) {
+  /* Area / locality search with suggestions as you type (Photon, free OpenStreetMap search). */
+  const areaSearch = { run: 0, timer: null, list: [] };
+  async function searchArea(o, query) {
+    const box = $(".area-results", o);
+    const q = query.trim();
+    if (q.length < 3) { box.classList.add("hidden"); return; }
+    const run = ++areaSearch.run;
     const k = D.kitchens[state.city];
-    const q = new URLSearchParams({ format: "jsonv2", limit: "1", countrycodes: "in", viewbox: [k.lng - 0.5, k.lat + 0.5, k.lng + 0.5, k.lat - 0.5].join(","), bounded: "1", ...params });
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?${q}`);
-    const list = await res.json();
-    return list[0] ? { lat: +list[0].lat, lng: +list[0].lon } : null;
-  }
-  async function geocodeAddress(o) {
-    const address = (details.address || "").trim(), landmark = (details.landmark || "").trim();
-    if (!address || details.loc) return;
-    const run = ++geo.run;
-    geo.state = "searching";
-    updateDeliveryUI(o);
-    const pin = ((address + " " + landmark).match(/\b\d{6}\b/) || [])[0];
-    const parts = address.split(",").map((x) => x.trim()).filter(Boolean);
-    const attempts = [
-      { q: [address, landmark, state.city].filter(Boolean).join(", ") },
-      pin && { postalcode: pin, country: "India" },
-      parts.length > 2 && { q: [...parts.slice(-3), state.city].join(", ") },
-      landmark && { q: `${landmark}, ${state.city}` }
-    ].filter(Boolean);
-    for (const params of attempts) {
-      let hit = null;
-      try { hit = await nominatim(params); } catch (e) { /* try the next one */ }
-      if (run !== geo.run) return; // the address changed meanwhile
-      if (hit) { setLocation(o, hit, { from: "address", fillAddress: false }); return; }
+    const params = new URLSearchParams({ q, lat: k.lat, lon: k.lng, limit: "6", lang: "en", bbox: [k.lng - 0.6, k.lat - 0.6, k.lng + 0.6, k.lat + 0.6].join(",") });
+    try {
+      const res = await fetch(`https://photon.komoot.io/api/?${params}`);
+      const data = await res.json();
+      if (run !== areaSearch.run) return;
+      areaSearch.list = (data.features || []).map((f) => {
+        const p = f.properties || {};
+        const title = p.name || [p.housenumber, p.street].filter(Boolean).join(" ") || p.district || p.city;
+        const sub = [p.street && p.name ? p.street : "", p.district || p.locality, p.city || p.county, p.state].filter((x, i, arr) => x && x !== title && arr.indexOf(x) === i).join(", ");
+        return { title, sub, postcode: (p.postcode || "").replace(/\s/g, ""), lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] };
+      }).filter((x) => x.title);
+      box.innerHTML = areaSearch.list.length
+        ? areaSearch.list.map((x, i) => `<button type="button" data-sug="${i}">${icon("pin")}<span><b>${esc(x.title)}</b> ${esc(x.sub)}</span></button>`).join("")
+        : `<p class="fine">No matches. Try a nearby landmark or area name, or use Pin on Map.</p>`;
+    } catch (e) {
+      if (run !== areaSearch.run) return;
+      box.innerHTML = `<p class="fine">Search isn't working right now. Please use My Location or Pin on Map.</p>`;
     }
-    geo.state = "notfound";
-    updateDeliveryUI(o);
+    box.classList.remove("hidden");
   }
-  // A new address replaces the location; a landmark/flat edit keeps a GPS location.
-  function addressEdited(o, now, field) {
-    if (field === "address" || details.locFrom !== "gps") {
-      details.loc = null;
-      details.km = null;
-      store.set("details", details);
-      geo.state = null;
-      geo.run++;
-      updateDeliveryUI(o);
+  function pickArea(o, i) {
+    const x = areaSearch.list[i];
+    if (!x) return;
+    const label = [x.title, x.sub].filter(Boolean).join(", ");
+    $("#f-area", o).value = label;
+    details.area = label;
+    if (/^\d{6}$/.test(x.postcode) && !/^\d{6}$/.test(details.pincode || "")) {
+      details.pincode = x.postcode;
+      $("#f-pincode", o).value = x.postcode;
     }
-    clearTimeout(geo.timer);
-    geo.timer = setTimeout(() => geocodeAddress(o), now ? 0 : 1500);
+    $(".area-results", o).classList.add("hidden");
+    setLocation(o, { lat: x.lat, lng: x.lng }, { from: "search", fillAddress: false });
   }
 
   function useMyLocation(o) {
@@ -812,9 +812,55 @@
     updateDeliveryUI(o, "Finding you…");
     navigator.geolocation.getCurrentPosition(
       (p) => setLocation(o, { lat: p.coords.latitude, lng: p.coords.longitude }, { from: "gps" }),
-      () => { updateDeliveryUI(o); toast("Couldn't get your location. Please type the address instead."); },
+      () => { updateDeliveryUI(o); toast("Couldn't get your location. Please search your area or use Pin on Map."); },
       { enableHighAccuracy: true, timeout: 10000 }
     );
+  }
+
+  /* Pin on Map: drag the map under a fixed centre pin, like delivery apps. */
+  let leafletReady = null;
+  function loadLeaflet() {
+    if (window.L) return Promise.resolve();
+    if (leafletReady) return leafletReady;
+    leafletReady = new Promise((resolve, reject) => {
+      const css = document.createElement("link");
+      css.rel = "stylesheet";
+      css.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      document.head.appendChild(css);
+      const js = document.createElement("script");
+      js.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      js.onload = resolve;
+      js.onerror = () => { leafletReady = null; reject(new Error("map failed to load")); };
+      document.head.appendChild(js);
+    });
+    return leafletReady;
+  }
+  async function openPinMap(o) {
+    const wrap = document.createElement("div");
+    wrap.className = "pinmap";
+    wrap.innerHTML = `
+      <div class="pinmap__box" role="dialog" aria-modal="true" aria-label="Pin your location">
+        <div class="pinmap__head"><h3>Pin your location</h3><button class="close-btn" type="button" data-pin-close aria-label="Close">${icon("x")}</button></div>
+        <div class="pinmap__map"><div id="pin-map"></div><div class="pinmap__pin">${icon("pin")}</div></div>
+        <p class="fine">Move the map so the pin sits on the exact building.</p>
+        <button class="btn" type="button" data-pin-ok>Confirm this location</button>
+      </div>`;
+    document.body.appendChild(wrap);
+    const close = () => wrap.remove();
+    wrap.addEventListener("click", (e) => { if (e.target === wrap || e.target.closest("[data-pin-close]")) close(); });
+    try { await loadLeaflet(); } catch (e) {
+      $(".pinmap__map", wrap).innerHTML = `<p class="fine" style="padding:16px">The map couldn't load. Please search your area or use My Location.</p>`;
+      return;
+    }
+    const L = window.L, start = details.loc || D.kitchens[state.city];
+    const map = L.map($("#pin-map", wrap), { zoomControl: true }).setView(start, details.loc ? 17 : 13);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap" }).addTo(map);
+    setTimeout(() => map.invalidateSize(), 200);
+    $("[data-pin-ok]", wrap).addEventListener("click", () => {
+      const c = map.getCenter();
+      close();
+      setLocation(o, { lat: c.lat, lng: c.lng }, { from: "pin" });
+    });
   }
 
   function lineText(line) {
@@ -872,11 +918,19 @@
         ${m.gift ? `<div class="field-row">${f("recipient", "Recipient's name", "text", "required")}${f("recipientPhone", "Recipient's phone", "tel", 'inputmode="tel" required')}</div>` : ""}
         ${m.needsAddress ? `
           <div class="field">
-            <label for="f-address">${m.gift ? "Recipient's address" : "Delivery address"}</label>
-            <button type="button" class="loc-gps loc-gps--big" data-loc-gps>${icon("pin")} Use my current location</button>
-            <textarea id="f-address" name="address" autocomplete="street-address" placeholder="${m.gift ? "Recipient's house / street, area" : "Or type your house / street, area"}" required>${esc(details.address || "")}</textarea>
+            <label>${m.gift ? "Recipient's location" : "Delivery location"}</label>
+            <div class="loc-actions">
+              <button type="button" class="loc-act" data-loc-pin>${icon("pin")} Pin on Map</button>
+              <button type="button" class="loc-act loc-act--dash" data-loc-gps>${icon("locate")} My Location</button>
+            </div>
           </div>
-          ${f("landmark", "Flat / landmark / pincode")}
+          <div class="field area-field">
+            <label for="f-area">Search area / locality *</label>
+            <div class="area-search">${icon("search")}<input id="f-area" name="area" autocomplete="off" placeholder="e.g. Purasaiwakkam, Anna Nagar…" value="${esc(details.area || "")}" required></div>
+            <div class="area-results hidden"></div>
+          </div>
+          <div class="field-row">${f("address", m.gift ? "Recipient's house / flat / street *" : "House / flat / street *", "text", 'autocomplete="street-address" required')}${f("pincode", "Pincode *", "text", 'inputmode="numeric" autocomplete="postal-code" required')}</div>
+          ${f("landmark", "Landmark (optional)")}
           <p class="loc-info"></p>
           ${D.vip ? `
           <button type="button" class="vip" data-vip aria-pressed="${!!details.vip}">
@@ -893,24 +947,31 @@
 
     $(".form", o).addEventListener("input", (e) => {
       if (e.target.name) { details[e.target.name] = e.target.value; store.set("details", details); }
-      if (e.target.name === "address" || e.target.name === "landmark") addressEdited(o, false, e.target.name);
+      if (e.target.name === "area") {
+        // A newly typed area replaces a location picked from the suggestions (not a GPS / map pin).
+        if (details.locFrom === "search" && details.loc) {
+          details.loc = null;
+          details.km = null;
+          store.set("details", details);
+          updateDeliveryUI(o);
+        }
+        clearTimeout(areaSearch.timer);
+        areaSearch.timer = setTimeout(() => searchArea(o, e.target.value), 300);
+      }
+      if (e.target.name === "pincode") e.target.value = details.pincode = e.target.value.replace(/\D/g, "").slice(0, 6);
       if (e.target.name === "date") $("[data-slots]", o).innerHTML = slotsHtml();
     });
     if (m.needsAddress) {
       updateDeliveryUI(o);
       // Location from another city, or distance not worked out yet: recalculate.
       if (details.loc && (details.km == null || details.kmFor !== state.city)) setLocation(o, details.loc, { fillAddress: false });
-      else if (!details.loc && details.address && geo.state !== "notfound") geocodeAddress(o);
-      // Leaving the address fields looks the address up straight away.
-      $(".form", o).addEventListener("change", (e) => {
-        if ((e.target.name === "address" || e.target.name === "landmark") && !details.loc) {
-          clearTimeout(geo.timer);
-          geocodeAddress(o);
-        }
-      });
     }
     o.addEventListener("click", (e) => {
       if (e.target.closest("[data-loc-gps]")) { useMyLocation(o); return; }
+      if (e.target.closest("[data-loc-pin]")) { openPinMap(o); return; }
+      const sug = e.target.closest("[data-sug]");
+      if (sug) { pickArea(o, +sug.dataset.sug); return; }
+      if (!e.target.closest(".area-field")) { const r = $(".area-results", o); if (r) r.classList.add("hidden"); }
       const vip = e.target.closest("[data-vip]");
       if (vip) {
         details.vip = !details.vip;
@@ -1005,7 +1066,7 @@
       `Phone: ${details.phone}`
     );
     if (m.gift) out.push(`Recipient: ${details.recipient} (${details.recipientPhone})`);
-    if (m.needsAddress) out.push(`Address: ${details.address}${details.landmark ? ", " + details.landmark : ""}`);
+    if (m.needsAddress) out.push(`Address: ${fullAddress()}`, ...(details.landmark ? [`Landmark: ${details.landmark}`] : []));
     if (m.needsAddress && details.loc) out.push(`Location: https://www.google.com/maps?q=${details.loc.lat},${details.loc.lng}`);
     out.push(`${m.needsAddress ? "Delivery" : "Pick-up"} on: ${fmtDate(details.date)}, ${slotLabel(details.time)}`);
     if (details.note) out.push(`Notes: ${details.note}`);
@@ -1037,7 +1098,7 @@
       mode: state.mode,
       customer: { name: details.name, phone: details.phone },
       recipient: m.gift ? { name: details.recipient, phone: details.recipientPhone } : null,
-      address: m.needsAddress ? details.address : "",
+      address: m.needsAddress ? fullAddress() : "",
       landmark: m.needsAddress ? details.landmark : "",
       loc: m.needsAddress ? details.loc || null : null,
       date: details.date,
@@ -1104,6 +1165,8 @@
     } else fallbackCopy(msg, open);
   }
 
+  const fullAddress = () => [details.address, details.area].map((x) => (x || "").trim()).filter(Boolean).join(", ") + (details.pincode ? ` – ${details.pincode}` : "");
+
   async function sendOrder(o) {
     const m = S.modes[state.mode];
     const err = $("[data-error]", o);
@@ -1112,11 +1175,10 @@
     if (!/^[+\d][\d\s-]{7,}$/.test(details.phone.trim())) missing.push("a valid phone number");
     if (m.gift && !details.recipient.trim()) missing.push("recipient's name");
     if (m.gift && !details.recipientPhone.trim()) missing.push("recipient's phone");
-    if (m.needsAddress && !details.address.trim()) missing.push("address");
-    if (!missing.length && m.needsAddress && !details.loc && geo.state === "searching") {
-      err.textContent = "Still calculating the delivery charge. Please try again in a second.";
-      err.classList.remove("hidden");
-      return;
+    if (m.needsAddress) {
+      if (!(details.area || "").trim() || !details.loc) missing.push("your area (pick it from the suggestions, or use My Location / Pin on Map)");
+      if (!details.address.trim()) missing.push("house / flat / street");
+      if (!/^\d{6}$/.test(details.pincode || "")) missing.push("a 6-digit pincode");
     }
     if (!missing.length && m.needsAddress && details.loc && !deliveryQuote()) {
       err.textContent = "Still calculating the delivery distance. Please try again in a second.";

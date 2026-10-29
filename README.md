@@ -24,11 +24,12 @@ The business takes orders by DM, so checkout builds a ready-to-send order messag
 
 ### Delivery charge by distance
 
-For **Get it Delivered** and **Send as a Gift**, the delivery charge is calculated from the address the customer types (looked up on OpenStreetMap, falling back to the pincode, area or landmark) or from **Use my current location**. If the address can't be found, the charge is confirmed on chat.
+For **Get it Delivered** and **Send as a Gift**, the customer sets the delivery spot with **Search area / locality** (suggestions as they type), **My Location** or **Pin on Map**. Area, house / street and a 6-digit pincode are compulsory; My Location and Pin on Map fill in the area and pincode automatically.
 The site works out the road distance from the kitchen in the chosen city, rounds it up to the next km and charges the matching price from `delivery.slabs` (6.4 km → 7 km → ₹155).
 The delivery charge, total and a Google Maps link to the pin are included in the order message.
 
-- Address search / auto-fill: OpenStreetMap Nominatim (free, no API key)
+- Area suggestions: [Photon](https://photon.komoot.io) (free OpenStreetMap search, no API key)
+- Area / pincode from My Location or a map pin: OpenStreetMap Nominatim; map: Leaflet + OpenStreetMap tiles
 - Road distance: the public OSRM routing service. If it can't be reached, the site estimates the distance as the straight-line distance × `roadFactor` and marks it "approx."
 - Beyond `maxKm`, the order can still be sent and the delivery charge is marked "to be confirmed".
 

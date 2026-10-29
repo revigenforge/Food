@@ -133,10 +133,13 @@ module.exports = (req, res) => handle(res, async () => {
   }
   if (req.method === "POST") {
     const ip = str((req.headers["x-forwarded-for"] || "").split(",")[0], 60) || "unknown";
-    if (!(await allow(`order:${ip}`, 10, 600))) throw new HttpError(429, "Too many orders from this device. Please message us directly.");
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
-    if (body.action === "payment") return submitPayment(res, body, req);
-    if (body.action === "paying") return payingNow(res, body, req);
+    // Separate limits: payment taps/submissions shouldn't use up a customer's order allowance.
+    if (body.action === "payment" || body.action === "paying") {
+      if (!(await allow(`pay:${ip}`, 30, 600))) throw new HttpError(429, "Too many attempts. Please message us directly.");
+      return body.action === "payment" ? submitPayment(res, body, req) : payingNow(res, body, req);
+    }
+    if (!(await allow(`order:${ip}`, 10, 600))) throw new HttpError(429, "Too many orders from this device. Please message us directly.");
     const now = Date.now();
     const order = {
       id: newId(),
