@@ -116,7 +116,7 @@ window.SITE = {
       eyebrow: "The one that started it all",
       title: "OG Cookie Pie",
       text: "Couples · Family · Celebration. Mix and match flavours",
-      image: "assets/img/og-cookie-pie.jpg",
+      image: "assets/img/og-cookie-pie-tin.jpg",
       target: "og-cookie-pie"
     },
     {
@@ -162,7 +162,7 @@ window.SITE = {
       category: "cookie-pies",
       name: "OG Cookie Pie",
       badge: "bestseller",
-      images: ["assets/img/og-cookie-pie.jpg", "assets/img/cookie-pots.jpg"],
+      images: ["assets/img/og-cookie-pie-tin.jpg", "assets/img/og-cookie-pie-cup.jpg"],
       description:
         "Our signature. A giant gooey cookie baked with a molten chocolate centre and a sprinkle of sea salt. The kind of dessert you order once and crave forever. Best enjoyed with a scoop of vanilla ice cream.",
       options: [
@@ -235,7 +235,7 @@ window.SITE = {
       category: "desserts",
       name: "Biscoff Banoffee",
       cities: ["Chennai"],
-      images: [],
+      images: ["assets/img/biscoff-banoffee.jpg"],
       description:
         "A buttery Biscoff biscuit base layered with silky dulce de leche, fresh bananas and whipped cream infused with cream cheese, finished with a Biscoff crumble. Sweet, creamy and indulgent in every bite.",
       options: [
@@ -264,6 +264,9 @@ window.SITE = {
   ],
 
   gallery: [
+    "assets/img/og-cookie-pie-tin.jpg",
+    "assets/img/og-cookie-pie-cup.jpg",
+    "assets/img/biscoff-banoffee.jpg",
     "assets/img/og-cookie-pie-full.jpg",
     "assets/img/cookie-pots.jpg",
     "assets/img/six-discoveries.jpg",
