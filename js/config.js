@@ -83,7 +83,7 @@ window.SITE = {
    * use the free OpenStreetMap services instead; the site also falls back to them if Google fails.
    */
   maps: {
-    googleKey: ""
+    googleKey: "AIzaSyC2ZUv6TuSwD_mrxC7gMnILRqpeiyL4WVA"
   },
 
   /*

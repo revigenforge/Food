@@ -29,6 +29,7 @@ The site works out the road distance from the kitchen in the chosen city, rounds
 The delivery charge, total and a Google Maps link to the pin are included in the order message.
 
 - **Google Maps (when `maps.googleKey` is set in `js/config.js`)**: Places API (New) suggestions and place details, Geocoding API for My Location / map pin, Google map for Pin on Map. If Google fails or rejects the key, the free services below take over.
+  The key in `js/config.js` is meant to be public (every website's Maps key is visible in the page); it's locked to the website's domains, so it doesn't work anywhere else. Suggestions are limited to about 45 km around the city's kitchen.
   Setup: Google Cloud project with billing → enable **Maps JavaScript API**, **Places API (New)** and **Geocoding API** → create an API key restricted to the website's domains (`https://www.sweetlyyoursbyzeen.com/*`, `https://sweetlyyoursbyzeen.com/*`) and to those 3 APIs → paste it into `maps.googleKey`.
 - Area suggestions without Google: the city's main areas from `js/areas.js` (with pincodes) come first, then [Photon](https://photon.komoot.io) (free OpenStreetMap search, no API key). Add an area there as `["Name|other spelling", "pincode", lat, lng]`.
 - Area / pincode from My Location or a map pin: OpenStreetMap Nominatim; map: Leaflet + OpenStreetMap tiles

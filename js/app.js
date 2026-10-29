@@ -828,12 +828,18 @@
           areaSearch.token = areaSearch.token || new AutocompleteSessionToken();
           const { suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
             input: q, sessionToken: areaSearch.token, includedRegionCodes: ["in"], language: "en", region: "in",
-            locationBias: { center: { lat: k.lat, lng: k.lng }, radius: 30000 }
+            // Only places around this city's kitchen (about 45 km each way), nearest first.
+            locationRestriction: { south: k.lat - 0.4, west: k.lng - 0.4, north: k.lat + 0.4, east: k.lng + 0.4 },
+            origin: { lat: k.lat, lng: k.lng }
           });
           return { google: true, list: (suggestions || []).filter((x) => x.placePrediction).map(({ placePrediction: pr }) => ({
             title: pr.mainText ? pr.mainText.text : pr.text.text, sub: pr.secondaryText ? pr.secondaryText.text : "", prediction: pr
           })) };
-        } catch (e) { console.warn("Google suggestions failed, using OpenStreetMap", e); }
+        } catch (e) {
+          // Key refused (wrong website, API off, billing stopped): stop asking Google for this visit.
+          if (/blocked|denied|not authori[sz]ed|api key|billing|permission|403/i.test(String(e && (e.message || e)))) googleBroken = true;
+          console.warn("Google suggestions failed, using OpenStreetMap", e);
+        }
       }
       const local = localAreas(q);
       let osm = [];
@@ -869,7 +875,9 @@
       if (await useGoogle()) {
         try {
           const { Geocoder } = await google.maps.importLibrary("geocoding");
-          const { results } = await new Geocoder().geocode({ location: loc });
+          const geocode = () => new Geocoder().geocode({ location: loc });
+          // Google sometimes answers with a passing server error: try once more before falling back.
+          const { results } = await geocode().catch(() => new Promise((r) => setTimeout(r, 800)).then(geocode));
           const comps = (results && results[0] && results[0].address_components) || [];
           const get = (t) => (comps.find((c) => c.types.includes(t)) || {}).long_name;
           return {
