@@ -198,7 +198,7 @@
     const pickup = o.mode === "pickup";
     switch (o.status) {
       case "placed":
-        return `Hi ${first}! We've received your ${S.name} order ${o.id}. We'll confirm it shortly.\n\nTrack your order: ${link}`;
+        return `Hi ${first}! We've received your ${S.name} order ${o.id}. We'll confirm it shortly.${payLine(o)}\n\nTrack your order: ${link}`;
       case "confirmed":
         return `Hi ${first}! 🎉 Your ${S.name} order ${o.id} is confirmed for ${when}.\nTotal: ${rupee(orderTotal(o))}${note}\n\nTrack your order: ${link}`;
       case "baking":
@@ -210,7 +210,7 @@
       case "completed":
         return `Thank you for ordering from ${S.name}, ${first}! We hope you loved every bite 💗\nTag us @${S.instagram} so we can see it!`;
       case "cancelled":
-        return `Hi ${first}, your ${S.name} order ${o.id} has been cancelled.${note}\n\nMessage us if you have any questions.`;
+        return `Hi ${first}, your ${S.name} order ${o.id} has been cancelled.${note}${paymentOf(o).status !== "unpaid" ? `\nYour payment of ${rupee(amountDue(o))} will be refunded to you.` : ""}\n\nMessage us if you have any questions.`;
       default:
         return `Hi ${first}! Here's your ${S.name} order: ${link}`;
     }
@@ -236,6 +236,9 @@
 
   const itemCount = (o) => o.items.reduce((n, i) => n + i.qty, 0);
 
+  // Pay-first orders whose delivery charge still has to be set by Zeen.
+  const needsCharge = (o) => P.payAfter === "placed" && o.status === "placed" && paymentOf(o).status === "unpaid" && !canPay(o);
+
   function payHtml(o) {
     if (!P.upiId && !P.qrImage) return "";
     if (o.status === "cancelled" && paymentOf(o).status === "unpaid") return "";
@@ -249,7 +252,9 @@
           ? `<button class="link" type="button" data-pay="unpaid">Undo</button>`
           : `<button class="chip-btn" type="button" data-pay="paid">${icon("check")} Mark as paid</button>`}
       </div>
-      ${pay.status === "submitted" ? `<p class="fine ad-pay__hint">Check your UPI / bank app for ${due} with ref ${esc(pay.ref)}, then tap “Mark as paid”.</p>` : ""}`;
+      ${needsCharge(o) ? `<p class="fine ad-pay__hint">Delivery charge to be confirmed: set the final total below (items + delivery) so the customer can pay.</p>` : ""}
+      ${o.status === "cancelled" && pay.status !== "unpaid" ? `<p class="fine ad-pay__hint">Cancelled after paying: refund ${due} to the customer${pay.ref ? ` (ref ${esc(pay.ref)})` : ""}.</p>` : ""}
+      ${pay.status === "submitted" && o.status !== "cancelled" ? `<p class="fine ad-pay__hint">Check your UPI / bank app for ${due} with ref ${esc(pay.ref)}, then tap “Mark as paid”.</p>` : ""}`;
   }
 
   // One-tap "Add to Google Calendar" (prefilled event). Zeen's default notification gives the alert.
@@ -321,7 +326,7 @@
           </div>
         </div>
 
-        <details class="ad-edit">
+        <details class="ad-edit"${needsCharge(o) ? " open" : ""}>
           <summary>Adjust total / note to customer</summary>
           <div class="field"><label>Final total (₹), leave empty to keep ${rupee(o.total)}</label><input type="number" min="0" inputmode="numeric" data-final value="${o.finalTotal != null ? o.finalTotal : ""}"></div>
           <div class="field"><label>Note shown on the customer's order page</label><textarea data-note maxlength="500" placeholder="e.g. Pick-up from Gate 2, Anna Nagar. Call when you arrive.">${esc(o.ownerNote || "")}</textarea></div>

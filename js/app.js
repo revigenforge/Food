@@ -1094,7 +1094,9 @@
         <div class="store-addr">${icon("pin")}<div><b>Store address · ${esc(state.city)}</b><span>${esc(D.kitchens[state.city].address)}</span>${D.kitchens[state.city].mapUrl ? `<a class="store-addr__map" href="${esc(D.kitchens[state.city].mapUrl)}" target="_blank" rel="noopener">${icon("external")} Get directions</a>` : ""}</div></div>` : ""}
       <p class="fine">${m.needsAddress
         ? `Delivery charges are calculated after entering the address, based on distance (within ${D.maxKm} km).`
-        : "Pick it up yourself, or arrange your own delivery (Porter, Rapido, etc.) from our store."} Prices are confirmed when we accept your order.${P.upiId ? ` Pay by UPI ${P.payAfter === "placed" ? "on your order page" : "once your order is confirmed"}.` : ""}</p>
+        : "Pick it up yourself, or arrange your own delivery (Porter, Rapido, etc.) from our store."}${!P.upiId ? " Prices are confirmed when we accept your order." : P.payAfter === "placed"
+          ? " Pay by UPI right after placing your order. If we ever can't make it, we'll refund you in full."
+          : " Prices are confirmed when we accept your order. Pay by UPI once your order is confirmed."}</p>
       <form class="form" novalidate>
         <h3>Order details</h3>
         <div class="field"><label>City</label><div class="seg">${citySeg}</div></div>
@@ -1313,16 +1315,18 @@
     store.set("orders", list.slice(0, 20));
   }
 
-  function showSendSheet(msg, orderId) {
+  function showSendSheet(msg, orderId, payNow) {
     const how = S.whatsapp ? "WhatsApp" : "Instagram";
     const body = `
       <div class="sent">
         <div class="sent__icon">${icon(orderId ? "check" : "heart")}</div>
         <h3>${orderId ? "Almost done!" : "One last step"}</h3>
         ${orderId ? `<p class="sent__id">Order ID <b>${esc(orderId)}</b></p>` : ""}
-        <p class="fine">Send your order to us on ${how} and Zeen will confirm it.
-          ${orderId ? `Your order page updates as soon as it's confirmed${P.upiId ? ", and that's where you'll pay by UPI" : ""}.` : ""}</p>
-        ${orderId ? `<a class="sent__track" href="${esc(trackUrl(orderId))}">${icon("receipt")} View order status</a>` : ""}
+        ${orderId && payNow
+          ? `<p class="fine">1. Send your order to us on ${how}.<br>2. Pay by UPI on your order page to confirm it.</p>`
+          : `<p class="fine">Send your order to us on ${how} and Zeen will confirm it.
+          ${orderId ? `Your order page updates as soon as it's confirmed${P.upiId ? ", and that's where you'll pay by UPI" : ""}.` : ""}</p>`}
+        ${orderId ? `<a class="sent__track" href="${esc(trackUrl(orderId))}">${icon(payNow ? "upi" : "receipt")} ${payNow ? "Pay now &amp; track order" : "View order status"}</a>` : ""}
       </div>`;
     const foot = S.whatsapp
       ? `<button class="btn btn--wa" type="button" data-final-send>${icon("whatsapp")} Send order on WhatsApp</button>`
@@ -1399,7 +1403,10 @@
       id = await createOrder();
       if (id) { lastPlaced = { sig, id, at: Date.now() }; store.set("lastPlaced", lastPlaced); rememberOrder(id); }
     }
-    showSendSheet(buildMessage(id), id);
+    // Pay straight away, unless the delivery charge still has to be confirmed on chat.
+    const q = S.modes[state.mode].needsAddress ? deliveryQuote() : { charge: 0 };
+    const payNow = P.payAfter === "placed" && (upiActive() || !!P.qrImage) && !!q && q.charge != null;
+    showSendSheet(buildMessage(id), id, payNow);
   }
   let lastPlaced = store.get("lastPlaced", null);
 
@@ -1425,7 +1432,7 @@
   function statusInfo(order) {
     const pickup = order.mode === "pickup";
     return {
-      placed: { icon: "clock", label: "Order received", text: "We've got your order! Zeen will confirm it on chat shortly." },
+      placed: { icon: "clock", label: "Order received", text: P.payAfter === "placed" && P.upiId ? "We've got your order! Pay below to confirm it, and Zeen will get baking." : "We've got your order! Zeen will confirm it on chat shortly." },
       confirmed: { icon: "check", label: "Confirmed", text: "Yay! Your order is confirmed and on our baking schedule." },
       baking: { icon: "flame", label: "Baking", text: "Your treats are in the oven right now. Smells amazing in here." },
       ready: pickup
@@ -1527,7 +1534,10 @@
   const paymentOf = (o) => o.payment || { status: "unpaid", ref: "" };
   function canPay(o) {
     if (o.status === "cancelled") return false;
-    return P.payAfter === "placed" || o.status !== "placed";
+    if (o.status !== "placed") return true;
+    if (P.payAfter !== "placed") return false;
+    // Delivery charge still to be confirmed (far away, or maps were down): wait for Zeen's final total.
+    return !(o.delivery && o.delivery.charge == null && o.finalTotal == null);
   }
   function upiLink(o) {
     const q = new URLSearchParams({ pa: P.upiId, pn: P.payeeName || S.name, am: amountDue(o).toFixed(2), cu: "INR", tn: `${S.name} ${o.id}` });
@@ -1588,7 +1598,7 @@
       </section>`;
     }
     if (!canPay(o)) {
-      return `<section class="pay pay--wait"><div class="pay__head">${icon("upi")}<div><h2>Pay by UPI</h2><p>You can pay ${label} here as soon as Zeen confirms your order.</p></div></div></section>`;
+      return `<section class="pay pay--wait"><div class="pay__head">${icon("upi")}<div><h2>Pay by UPI</h2><p>${P.payAfter === "placed" ? `Zeen will confirm your delivery charge on chat, then you can pay ${label} here.` : `You can pay ${label} here as soon as Zeen confirms your order.`}</p></div></div></section>`;
     }
     if (!upiActive() && !P.qrImage) {
       return `<section class="pay pay--wait"><div class="pay__head">${icon("upi")}<div><h2>Pay ${label}</h2><p>Online UPI payment isn't active yet. Zeen will share payment details on chat.</p></div></div></section>`;

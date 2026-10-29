@@ -100,7 +100,7 @@ window.SITE = {
     upiId: "shehzeenkhatija@oksbi",
     payeeName: "Shehzeen Khatija", // should match the name on the UPI account
     qrImage: "",
-    payAfter: "confirmed",
+    payAfter: "placed",
     advancePercent: 100
   },
 
