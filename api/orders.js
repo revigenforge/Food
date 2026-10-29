@@ -139,7 +139,7 @@ module.exports = (req, res) => handle(res, async () => {
       if (!(await allow(`pay:${ip}`, 30, 600))) throw new HttpError(429, "Too many attempts. Please message us directly.");
       return body.action === "payment" ? submitPayment(res, body, req) : payingNow(res, body, req);
     }
-    if (!(await allow(`order:${ip}`, 10, 600))) throw new HttpError(429, "Too many orders from this device. Please message us directly.");
+    if (!(await allow(`order:${ip}`, 30, 600))) throw new HttpError(429, "Too many orders from this device. Please message us directly.");
     const now = Date.now();
     const order = {
       id: newId(),

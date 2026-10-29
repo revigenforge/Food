@@ -82,8 +82,21 @@
     cart: store.get("cart", [])
   };
   if (!S.cities.includes(state.city)) state.city = S.cities[0];
-  // Drop saved cart lines for items that are no longer on the menu, or not sold in this city.
-  state.cart = state.cart.filter((l) => S.items.some((i) => i.id === l.id && (!i.cities || i.cities.includes(state.city))));
+  // Drop saved cart lines that no longer match the menu: removed items, items not sold in this
+  // city, or options (sizes / flavours / add-ons) that have changed since the cart was saved.
+  function validLine(l) {
+    const item = S.items.find((i) => i.id === l.id);
+    if (!item || (item.cities && !item.cities.includes(state.city))) return false;
+    if (!Array.isArray(l.picks) || l.picks.length !== item.options.length || !(l.qty >= 1)) return false;
+    const ok = item.options.every((g, gi) => {
+      const p = l.picks[gi];
+      const list = g.multi ? (Array.isArray(p) ? p : [p]) : [p];
+      return list.length > 0 && list.every((ci) => Number.isInteger(ci) && ci >= 0 && ci < g.choices.length);
+    });
+    const addonsOk = (l.addons || []).every((a) => (S.giftAddons || []).some((x) => x.id === a.id) && a.qty >= 1);
+    return ok && addonsOk;
+  }
+  state.cart = (Array.isArray(state.cart) ? state.cart : []).filter((l) => l && validLine(l));
   if (state.mode && !S.modes[state.mode]) state.mode = null;
 
   const saveCart = () => { store.set("cart", state.cart); renderCartCount(); };
@@ -498,7 +511,13 @@
     $$(".overlay").forEach((o) => o.remove());
     document.body.style.overflow = "";
   }
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeSheet(); $$(".lightbox").forEach((l) => l.remove()); } });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const pin = $(".pinmap");
+    if (pin) { pin.remove(); return; }
+    closeSheet();
+    $$(".lightbox").forEach((l) => l.remove());
+  });
 
   /* ---------- Product options sheet ---------- */
   function openProduct(id) {
@@ -600,7 +619,9 @@
   const premiumNames = (item) => item.options.flatMap((g) => g.choices.filter((c) => c.premium).map((c) => c.label)).join(" / ");
 
   /* ---------- Cart + checkout ---------- */
-  const details = store.get("details", { name: "", phone: "", address: "", landmark: "", date: "", time: "", recipient: "", recipientPhone: "", note: "" });
+  const DETAIL_DEFAULTS = { name: "", phone: "", address: "", area: "", pincode: "", landmark: "", date: "", time: "", recipient: "", recipientPhone: "", note: "" };
+  const details = Object.assign({}, DETAIL_DEFAULTS, store.get("details", {}));
+  Object.keys(DETAIL_DEFAULTS).forEach((k) => { if (typeof details[k] !== "string") details[k] = ""; });
 
   const localDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   function minDate() {
@@ -706,7 +727,9 @@
     if (info) {
       if (status) info.innerHTML = status;
       else if (q && q.vip) info.textContent = "👑 The owner will deliver this one himself.";
-      else if (!details.loc) info.textContent = "Search your area and pick it from the list, or use My Location / Pin on Map, to calculate the delivery charge.";
+      else if (!details.loc) info.textContent = mapsDown
+        ? "Maps aren't responding right now. Type your area and pincode, and we'll confirm the delivery charge on chat."
+        : "Search your area and pick it from the list, or use My Location / Pin on Map, to calculate the delivery charge.";
       else if (!q) info.textContent = "Calculating distance…";
       else {
         const dist = `${details.kmSource === "approx" ? "~" : ""}${q.km.toFixed(1)} km${details.kmSource === "road" ? " by road" : " (approx.)"}`;
@@ -719,7 +742,7 @@
     const vipBox = $("[data-vip]", o);
     if (vipBox) vipBox.setAttribute("aria-pressed", !!(q && q.vip));
     if (dl) dl.textContent = q && q.vip ? rupee(q.charge) : !details.loc
-      ? "Calculated after entering address"
+      ? (mapsDown ? "To be confirmed" : "Calculated after entering address")
       : !q ? "Calculating…" : q.outside ? "To be confirmed" : rupee(q.charge);
     const gt = $("[data-grand]", o);
     if (gt) gt.textContent = rupee(grandTotal());
@@ -772,6 +795,8 @@
   const pin6 = (v) => { const d = String(v || "").replace(/\s/g, ""); return /^\d{6}$/.test(d) ? d : ""; };
   const uniq = (parts) => parts.filter((x, i, arr) => x && arr.indexOf(x) === i);
 
+  // Set when the map services fail, so delivery orders can still go through ("charge confirmed on chat").
+  let mapsDown = false;
   const mapsApi = {
     // Suggestions while typing: [{ title, sub, ... }]
     async suggest(q) {
@@ -869,7 +894,9 @@
         (byGoogle ? `<p class="powered-by">powered by Google</p>` : "");
     } catch (e) {
       if (run !== areaSearch.run) return;
-      box.innerHTML = `<p class="fine">Search isn't working right now. Please use My Location or Pin on Map.</p>`;
+      mapsDown = true;
+      updateDeliveryUI(o);
+      box.innerHTML = `<p class="fine">Search isn't working right now. Please use My Location or Pin on Map, or just type your area and we'll confirm the delivery charge on chat.</p>`;
     }
     box.classList.remove("hidden");
   }
@@ -965,7 +992,9 @@
     }
     if (!getCenter) {
       try { await loadLeaflet(); } catch (e) {
-        $(".pinmap__map", wrap).innerHTML = `<p class="fine" style="padding:16px">The map couldn't load. Please search your area or use My Location.</p>`;
+        mapsDown = true;
+        updateDeliveryUI(o);
+        $(".pinmap__map", wrap).innerHTML = `<p class="fine" style="padding:16px">The map couldn't load. Please search your area or use My Location, or just type your area and we'll confirm the delivery charge on chat.</p>`;
         return;
       }
       const L = window.L;
@@ -1109,7 +1138,7 @@
       const d = e.target.closest("[data-d]");
       if (d) {
         const line = state.cart[+d.dataset.line];
-        line.qty += +d.dataset.d;
+        line.qty = Math.min(20, line.qty + +d.dataset.d);
         if (line.qty <= 0) state.cart.splice(+d.dataset.line, 1);
         saveCart(); renderCards();
         const top = $(".sheet__body", o).scrollTop;
@@ -1167,7 +1196,7 @@
     const q = deliveryQuote();
     if (m.needsAddress) {
       if (q && q.vip) out.push(`Delivery: ${D.vip.name} = ${rupee(q.charge)}`);
-      else if (!q) out.push("Delivery: to be confirmed (address not found on the map)");
+      else if (!q) out.push("Delivery: to be confirmed (please share the charge)");
       else {
         const dist = `${q.km.toFixed(1)} km${details.kmSource === "approx" ? " (approx.)" : ""}`;
         out.push(q.outside
@@ -1266,6 +1295,12 @@
       state.cart = [];
       saveCart();
       renderCards();
+      // One-off choices shouldn't carry over to the next order.
+      details.vip = false;
+      details.note = "";
+      store.set("details", details);
+      lastPlaced = null;
+      store.set("lastPlaced", null);
     });
   }
 
@@ -1292,9 +1327,10 @@
     if (!details.name.trim()) missing.push("name");
     if (!/^[+\d][\d\s-]{7,}$/.test(details.phone.trim())) missing.push("a valid phone number");
     if (m.gift && !details.recipient.trim()) missing.push("recipient's name");
-    if (m.gift && !details.recipientPhone.trim()) missing.push("recipient's phone");
+    if (m.gift && !/^[+\d][\d\s-]{7,}$/.test(details.recipientPhone.trim())) missing.push("a valid recipient's phone number");
     if (m.needsAddress) {
-      if (!(details.area || "").trim() || !details.loc) missing.push("your area (pick it from the suggestions, or use My Location / Pin on Map)");
+      if (!details.area.trim()) missing.push("your area / locality");
+      else if (!details.loc && !mapsDown) missing.push("your area from the suggestions (or use My Location / Pin on Map)");
       if (!details.address.trim()) missing.push("house / flat / street");
       if (!/^\d{6}$/.test(details.pincode || "")) missing.push("a 6-digit pincode");
     }
@@ -1317,11 +1353,17 @@
     const btn = $("[data-send]", o);
     btn.disabled = true;
     btn.textContent = "Placing your order…";
-    const id = await createOrder();
-    const msg = buildMessage(id);
-    if (id) rememberOrder(id);
-    showSendSheet(msg, id);
+    // Same cart and details as an order placed a moment ago (e.g. the customer closed the
+    // "Almost done" screen and tapped Place order again): reuse it instead of a duplicate.
+    const sig = JSON.stringify([state.cart, state.mode, state.city, details, grandTotal()]);
+    let id = lastPlaced && lastPlaced.sig === sig && Date.now() - lastPlaced.at < 30 * 60 * 1000 ? lastPlaced.id : null;
+    if (!id) {
+      id = await createOrder();
+      if (id) { lastPlaced = { sig, id, at: Date.now() }; store.set("lastPlaced", lastPlaced); rememberOrder(id); }
+    }
+    showSendSheet(buildMessage(id), id);
   }
+  let lastPlaced = store.get("lastPlaced", null);
 
   function fallbackCopy(msg, then) {
     const ta = document.createElement("textarea");
