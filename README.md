@@ -28,7 +28,9 @@ For **Get it Delivered** and **Send as a Gift**, the customer sets the delivery 
 The site works out the road distance from the kitchen in the chosen city, rounds it up to the next km and charges the matching price from `delivery.slabs` (6.4 km → 7 km → ₹155).
 The delivery charge, total and a Google Maps link to the pin are included in the order message.
 
-- Area suggestions: [Photon](https://photon.komoot.io) (free OpenStreetMap search, no API key)
+- **Google Maps (when `maps.googleKey` is set in `js/config.js`)**: Places API (New) suggestions and place details, Geocoding API for My Location / map pin, Google map for Pin on Map. If Google fails or rejects the key, the free services below take over.
+  Setup: Google Cloud project with billing → enable **Maps JavaScript API**, **Places API (New)** and **Geocoding API** → create an API key restricted to the website's domains (`https://www.sweetlyyoursbyzeen.com/*`, `https://sweetlyyoursbyzeen.com/*`) and to those 3 APIs → paste it into `maps.googleKey`.
+- Area suggestions without Google: [Photon](https://photon.komoot.io) (free OpenStreetMap search, no API key)
 - Area / pincode from My Location or a map pin: OpenStreetMap Nominatim; map: Leaflet + OpenStreetMap tiles
 - Road distance: the public OSRM routing service. If it can't be reached, the site estimates the distance as the straight-line distance × `roadFactor` and marks it "approx."
 - Beyond `maxKm`, the order can still be sent and the delivery charge is marked "to be confirmed".

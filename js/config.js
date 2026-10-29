@@ -78,6 +78,15 @@ window.SITE = {
   },
 
   /*
+   * Google Maps for the delivery address (area suggestions, place details, map pin).
+   * Paste Zeen's browser API key here (restricted to the website's domains). Leave empty to
+   * use the free OpenStreetMap services instead; the site also falls back to them if Google fails.
+   */
+  maps: {
+    googleKey: ""
+  },
+
+  /*
    * UPI payments (needs order tracking on Vercel).
    * upiId:      Zeen's UPI ID, e.g. "sweetlyyours@okhdfcbank". A business UPI ID works best
    *             with Google Pay. While this has no "@", payments show as "not active yet".

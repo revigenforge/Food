@@ -743,68 +743,154 @@
     if (opts.fillAddress !== false) reverseGeocode(o, loc);
   }
 
+  /* ---------- Maps: Google Maps when a key is set (S.maps.googleKey), else free OpenStreetMap ----------
+     Google: Places API (New) suggestions + details, Geocoding API, Maps JavaScript API.
+     If Google is missing, fails to load or rejects the key, everything falls back to OpenStreetMap. */
+  const GKEY = (S.maps && S.maps.googleKey) || "";
+  let googleReady = null, googleBroken = false, googleFail = null;
+  // Called by Google on an invalid / restricted key: stop using Google straight away.
+  window.gm_authFailure = () => { googleBroken = true; if (googleFail) googleFail(new Error("Google Maps key rejected")); };
+  function loadGoogle() {
+    if (window.google && google.maps && google.maps.importLibrary) return Promise.resolve();
+    if (googleReady) return googleReady;
+    googleReady = new Promise((resolve, reject) => {
+      window.__syGoogleReady = resolve;
+      googleFail = reject;
+      const js = document.createElement("script");
+      js.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GKEY)}&v=weekly&loading=async&region=IN&language=en&callback=__syGoogleReady`;
+      js.async = true;
+      js.onerror = () => reject(new Error("Google Maps failed to load"));
+      document.head.appendChild(js);
+      setTimeout(() => reject(new Error("Google Maps timed out")), 8000);
+    });
+    return googleReady;
+  }
+  async function useGoogle() {
+    if (!GKEY || googleBroken) return false;
+    try { await loadGoogle(); return !googleBroken; } catch (e) { googleBroken = true; return false; }
+  }
+  const pin6 = (v) => { const d = String(v || "").replace(/\s/g, ""); return /^\d{6}$/.test(d) ? d : ""; };
+  const uniq = (parts) => parts.filter((x, i, arr) => x && arr.indexOf(x) === i);
+
+  const mapsApi = {
+    // Suggestions while typing: [{ title, sub, ... }]
+    async suggest(q) {
+      const k = D.kitchens[state.city];
+      if (await useGoogle()) {
+        try {
+          const { AutocompleteSuggestion, AutocompleteSessionToken } = await google.maps.importLibrary("places");
+          areaSearch.token = areaSearch.token || new AutocompleteSessionToken();
+          const { suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
+            input: q, sessionToken: areaSearch.token, includedRegionCodes: ["in"], language: "en", region: "in",
+            locationBias: { center: { lat: k.lat, lng: k.lng }, radius: 30000 }
+          });
+          return { google: true, list: (suggestions || []).filter((x) => x.placePrediction).map(({ placePrediction: pr }) => ({
+            title: pr.mainText ? pr.mainText.text : pr.text.text, sub: pr.secondaryText ? pr.secondaryText.text : "", prediction: pr
+          })) };
+        } catch (e) { console.warn("Google suggestions failed, using OpenStreetMap", e); }
+      }
+      const params = new URLSearchParams({ q, lat: k.lat, lon: k.lng, limit: "6", lang: "en", bbox: [k.lng - 0.6, k.lat - 0.6, k.lng + 0.6, k.lat + 0.6].join(",") });
+      const data = await (await fetch(`https://photon.komoot.io/api/?${params}`)).json();
+      return { google: false, list: (data.features || []).map((f) => {
+        const pr = f.properties || {};
+        const title = pr.name || [pr.housenumber, pr.street].filter(Boolean).join(" ") || pr.district || pr.city;
+        const sub = uniq([pr.street && pr.name ? pr.street : "", pr.district || pr.locality, pr.city || pr.county, pr.state]).filter((x) => x !== title).join(", ");
+        return { title, sub, postcode: pin6(pr.postcode), lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] };
+      }).filter((x) => x.title) };
+    },
+    // Exact spot + pincode for a picked suggestion
+    async resolve(x) {
+      if (x.prediction) {
+        const place = x.prediction.toPlace();
+        await place.fetchFields({ fields: ["location", "addressComponents"] });
+        areaSearch.token = null; // a pick ends the Google billing session
+        const pc = (place.addressComponents || []).find((c) => c.types.includes("postal_code"));
+        return { lat: place.location.lat(), lng: place.location.lng(), postcode: pin6(pc && pc.longText) };
+      }
+      return { lat: x.lat, lng: x.lng, postcode: x.postcode };
+    },
+    // Area / pincode / house for a GPS or map-pin location
+    async reverse(loc) {
+      if (await useGoogle()) {
+        try {
+          const { Geocoder } = await google.maps.importLibrary("geocoding");
+          const { results } = await new Geocoder().geocode({ location: loc });
+          const comps = (results && results[0] && results[0].address_components) || [];
+          const get = (t) => (comps.find((c) => c.types.includes(t)) || {}).long_name;
+          return {
+            area: uniq([get("sublocality_level_2") || get("neighborhood"), get("sublocality_level_1") || get("sublocality"), get("locality")]).join(", "),
+            postcode: pin6(get("postal_code")),
+            house: get("route") ? uniq([get("street_number") || get("premise"), get("route")]).join(", ") : ""
+          };
+        } catch (e) { console.warn("Google geocoding failed, using OpenStreetMap", e); }
+      }
+      const data = await (await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat=${loc.lat}&lon=${loc.lng}&zoom=18`)).json();
+      const ad = data.address || {};
+      return {
+        area: uniq([ad.neighbourhood || ad.suburb || ad.quarter || ad.residential || ad.road, ad.city_district || ad.suburb, ad.city || ad.town || ad.county]).join(", "),
+        postcode: pin6(ad.postcode),
+        house: ad.house_number && ad.road ? `${ad.house_number}, ${ad.road}` : ""
+      };
+    }
+  };
+
   // After My Location / Pin on Map: fill in the area and pincode for the customer.
   async function reverseGeocode(o, loc) {
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat=${loc.lat}&lon=${loc.lng}&zoom=18`);
-      const data = await res.json();
-      if (details.loc !== loc || !data.address) return;
-      const ad = data.address;
-      const area = [ad.neighbourhood || ad.suburb || ad.quarter || ad.residential || ad.road, ad.city_district || ad.suburb, ad.city || ad.town || ad.county]
-        .filter((x, i, arr) => x && arr.indexOf(x) === i).join(", ");
+      const r = await mapsApi.reverse(loc);
+      if (details.loc !== loc) return;
       const set = (name, value) => {
         const el = $(`[name="${name}"]`, o);
         if (!value || !el) return;
         el.value = value;
         details[name] = value;
       };
-      set("area", area);
-      if (/^\d{6}$/.test((ad.postcode || "").replace(/\s/g, ""))) set("pincode", ad.postcode.replace(/\s/g, ""));
-      if (!details.address.trim() && ad.house_number && ad.road) set("address", `${ad.house_number}, ${ad.road}`);
+      set("area", r.area);
+      set("pincode", r.postcode);
+      if (!details.address.trim()) set("address", r.house);
       store.set("details", details);
     } catch (e) { /* customer fills it in */ }
   }
 
-  /* Area / locality search with suggestions as you type (Photon, free OpenStreetMap search). */
-  const areaSearch = { run: 0, timer: null, list: [] };
+  /* Area / locality search with suggestions as you type. */
+  const areaSearch = { run: 0, timer: null, list: [], token: null };
   async function searchArea(o, query) {
     const box = $(".area-results", o);
     const q = query.trim();
     if (q.length < 3) { box.classList.add("hidden"); return; }
     const run = ++areaSearch.run;
-    const k = D.kitchens[state.city];
-    const params = new URLSearchParams({ q, lat: k.lat, lon: k.lng, limit: "6", lang: "en", bbox: [k.lng - 0.6, k.lat - 0.6, k.lng + 0.6, k.lat + 0.6].join(",") });
     try {
-      const res = await fetch(`https://photon.komoot.io/api/?${params}`);
-      const data = await res.json();
+      const { google: byGoogle, list } = await mapsApi.suggest(q);
       if (run !== areaSearch.run) return;
-      areaSearch.list = (data.features || []).map((f) => {
-        const p = f.properties || {};
-        const title = p.name || [p.housenumber, p.street].filter(Boolean).join(" ") || p.district || p.city;
-        const sub = [p.street && p.name ? p.street : "", p.district || p.locality, p.city || p.county, p.state].filter((x, i, arr) => x && x !== title && arr.indexOf(x) === i).join(", ");
-        return { title, sub, postcode: (p.postcode || "").replace(/\s/g, ""), lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] };
-      }).filter((x) => x.title);
-      box.innerHTML = areaSearch.list.length
-        ? areaSearch.list.map((x, i) => `<button type="button" data-sug="${i}">${icon("pin")}<span><b>${esc(x.title)}</b> ${esc(x.sub)}</span></button>`).join("")
-        : `<p class="fine">No matches. Try a nearby landmark or area name, or use Pin on Map.</p>`;
+      areaSearch.list = list;
+      box.innerHTML = (list.length
+        ? list.map((x, i) => `<button type="button" data-sug="${i}">${icon("pin")}<span><b>${esc(x.title)}</b> ${esc(x.sub)}</span></button>`).join("")
+        : `<p class="fine">No matches. Try a nearby landmark or area name, or use Pin on Map.</p>`) +
+        (byGoogle ? `<p class="powered-by">powered by Google</p>` : "");
     } catch (e) {
       if (run !== areaSearch.run) return;
       box.innerHTML = `<p class="fine">Search isn't working right now. Please use My Location or Pin on Map.</p>`;
     }
     box.classList.remove("hidden");
   }
-  function pickArea(o, i) {
+  async function pickArea(o, i) {
     const x = areaSearch.list[i];
     if (!x) return;
     const label = [x.title, x.sub].filter(Boolean).join(", ");
     $("#f-area", o).value = label;
     details.area = label;
-    if (/^\d{6}$/.test(x.postcode) && !/^\d{6}$/.test(details.pincode || "")) {
-      details.pincode = x.postcode;
-      $("#f-pincode", o).value = x.postcode;
-    }
     $(".area-results", o).classList.add("hidden");
-    setLocation(o, { lat: x.lat, lng: x.lng }, { from: "search", fillAddress: false });
+    updateDeliveryUI(o, "Finding the location…");
+    try {
+      const r = await mapsApi.resolve(x);
+      if (r.postcode && !pin6(details.pincode)) {
+        details.pincode = r.postcode;
+        $("#f-pincode", o).value = r.postcode;
+      }
+      setLocation(o, { lat: r.lat, lng: r.lng }, { from: "search", fillAddress: false });
+    } catch (e) {
+      updateDeliveryUI(o, "Couldn't find that place. Please try another suggestion, or use Pin on Map.");
+    }
   }
 
   // In-app browsers (Instagram, Facebook, WhatsApp) often block location.
@@ -867,16 +953,29 @@
     document.body.appendChild(wrap);
     const close = () => wrap.remove();
     wrap.addEventListener("click", (e) => { if (e.target === wrap || e.target.closest("[data-pin-close]")) close(); });
-    try { await loadLeaflet(); } catch (e) {
-      $(".pinmap__map", wrap).innerHTML = `<p class="fine" style="padding:16px">The map couldn't load. Please search your area or use My Location.</p>`;
-      return;
+    const start = details.loc || D.kitchens[state.city];
+    const el = $("#pin-map", wrap);
+    let getCenter = null;
+    if (await useGoogle()) {
+      try {
+        const { Map } = await google.maps.importLibrary("maps");
+        const map = new Map(el, { center: { lat: start.lat, lng: start.lng }, zoom: details.loc ? 18 : 14, disableDefaultUI: true, zoomControl: true, gestureHandling: "greedy", clickableIcons: false });
+        getCenter = () => { const c = map.getCenter(); return { lat: c.lat(), lng: c.lng() }; };
+      } catch (e) { console.warn("Google map failed, using OpenStreetMap", e); }
     }
-    const L = window.L, start = details.loc || D.kitchens[state.city];
-    const map = L.map($("#pin-map", wrap), { zoomControl: true }).setView(start, details.loc ? 17 : 13);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap" }).addTo(map);
-    setTimeout(() => map.invalidateSize(), 200);
+    if (!getCenter) {
+      try { await loadLeaflet(); } catch (e) {
+        $(".pinmap__map", wrap).innerHTML = `<p class="fine" style="padding:16px">The map couldn't load. Please search your area or use My Location.</p>`;
+        return;
+      }
+      const L = window.L;
+      const map = L.map(el, { zoomControl: true }).setView(start, details.loc ? 17 : 13);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap" }).addTo(map);
+      setTimeout(() => map.invalidateSize(), 200);
+      getCenter = () => map.getCenter();
+    }
     $("[data-pin-ok]", wrap).addEventListener("click", () => {
-      const c = map.getCenter();
+      const c = getCenter();
       close();
       setLocation(o, { lat: c.lat, lng: c.lng }, { from: "pin" });
     });
