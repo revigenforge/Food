@@ -795,6 +795,27 @@
   const pin6 = (v) => { const d = String(v || "").replace(/\s/g, ""); return /^\d{6}$/.test(d) ? d : ""; };
   const uniq = (parts) => parts.filter((x, i, arr) => x && arr.indexOf(x) === i);
 
+  // Main areas of the city (js/areas.js) matching the typed text, best matches first.
+  const normArea = (v) => String(v || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  function localAreas(q) {
+    const want = normArea(q);
+    const words = q.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    if (!want) return [];
+    const city = state.city;
+    return ((window.AREAS || {})[city] || []).map(([names, postcode, lat, lng]) => {
+      const all = names.split("|");
+      let score = 0;
+      for (const n of all) {
+        const nn = normArea(n);
+        const nw = n.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+        if (nn.startsWith(want)) score = Math.max(score, 3);
+        else if (words.every((w) => nw.some((x) => x.startsWith(w)))) score = Math.max(score, 2);
+        else if (words.length === 1 && want.length >= 4 && nn.includes(want)) score = Math.max(score, 1);
+      }
+      return { score, title: all[0], sub: `${city} – ${postcode}`, label: `${all[0]}, ${city}`, postcode, lat, lng };
+    }).filter((x) => x.score).sort((a, b) => b.score - a.score).slice(0, 5);
+  }
+
   // Set when the map services fail, so delivery orders can still go through ("charge confirmed on chat").
   let mapsDown = false;
   const mapsApi = {
@@ -814,14 +835,23 @@
           })) };
         } catch (e) { console.warn("Google suggestions failed, using OpenStreetMap", e); }
       }
-      const params = new URLSearchParams({ q, lat: k.lat, lon: k.lng, limit: "6", lang: "en", bbox: [k.lng - 0.6, k.lat - 0.6, k.lng + 0.6, k.lat + 0.6].join(",") });
-      const data = await (await fetch(`https://photon.komoot.io/api/?${params}`)).json();
-      return { google: false, list: (data.features || []).map((f) => {
-        const pr = f.properties || {};
-        const title = pr.name || [pr.housenumber, pr.street].filter(Boolean).join(" ") || pr.district || pr.city;
-        const sub = uniq([pr.street && pr.name ? pr.street : "", pr.district || pr.locality, pr.city || pr.county, pr.state]).filter((x) => x !== title).join(", ");
-        return { title, sub, postcode: pin6(pr.postcode), lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] };
-      }).filter((x) => x.title) };
+      const local = localAreas(q);
+      let osm = [];
+      if (q.length >= 3) try {
+        const params = new URLSearchParams({ q, lat: k.lat, lon: k.lng, limit: "6", lang: "en", bbox: [k.lng - 0.6, k.lat - 0.6, k.lng + 0.6, k.lat + 0.6].join(",") });
+        const data = await (await fetch(`https://photon.komoot.io/api/?${params}`)).json();
+        osm = (data.features || []).map((f) => {
+          const pr = f.properties || {};
+          const title = pr.name || [pr.housenumber, pr.street].filter(Boolean).join(" ") || pr.district || pr.city;
+          const sub = uniq([pr.street && pr.name ? pr.street : "", pr.district || pr.locality, pr.city || pr.county, pr.state]).filter((x) => x !== title).join(", ");
+          return { title, sub, postcode: pin6(pr.postcode), lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] };
+        }).filter((x) => x.title);
+      } catch (e) {
+        if (!local.length) throw e; // search is down and there's nothing built in to offer
+      }
+      // Built-in areas first; drop OpenStreetMap results that are just the same area again.
+      const seen = local.map((x) => normArea(x.title));
+      return { google: false, list: local.concat(osm.filter((x) => !seen.includes(normArea(x.title)))).slice(0, 8) };
     },
     // Exact spot + pincode for a picked suggestion
     async resolve(x) {
@@ -882,7 +912,7 @@
   async function searchArea(o, query) {
     const box = $(".area-results", o);
     const q = query.trim();
-    if (q.length < 3) { box.classList.add("hidden"); return; }
+    if (q.length < 2 || (q.length < 3 && !localAreas(q).length)) { box.classList.add("hidden"); return; }
     const run = ++areaSearch.run;
     try {
       const { google: byGoogle, list } = await mapsApi.suggest(q);
@@ -903,7 +933,7 @@
   async function pickArea(o, i) {
     const x = areaSearch.list[i];
     if (!x) return;
-    const label = [x.title, x.sub].filter(Boolean).join(", ");
+    const label = x.label || [x.title, x.sub].filter(Boolean).join(", ");
     $("#f-area", o).value = label;
     details.area = label;
     $(".area-results", o).classList.add("hidden");
