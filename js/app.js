@@ -807,14 +807,33 @@
     setLocation(o, { lat: x.lat, lng: x.lng }, { from: "search", fillAddress: false });
   }
 
+  // In-app browsers (Instagram, Facebook, WhatsApp) often block location.
+  const inAppBrowser = () => /Instagram|FBAN|FBAV|FB_IAB|WhatsApp/i.test(navigator.userAgent);
   function useMyLocation(o) {
-    if (!navigator.geolocation) { toast("Location isn't available on this device"); return; }
+    const fail = (why) => {
+      updateDeliveryUI(o, `${icon("locate")} ${why}`);
+      toast(why);
+    };
+    if (!navigator.geolocation || !window.isSecureContext) {
+      fail("Location isn't available here. Please search your area or use Pin on Map.");
+      return;
+    }
     updateDeliveryUI(o, "Finding you…");
-    navigator.geolocation.getCurrentPosition(
-      (p) => setLocation(o, { lat: p.coords.latitude, lng: p.coords.longitude }, { from: "gps" }),
-      () => { updateDeliveryUI(o); toast("Couldn't get your location. Please search your area or use Pin on Map."); },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
+    const ok = (p) => setLocation(o, { lat: p.coords.latitude, lng: p.coords.longitude }, { from: "gps" });
+    const explain = (err) => {
+      if (err.code === 1) {
+        fail(inAppBrowser()
+          ? "Location is blocked in this app. Tap ⋮ and choose “Open in Chrome”, or search your area / use Pin on Map."
+          : "Location permission is blocked. Tap the 🔒 icon in the address bar → Permissions → Location → Allow, then try again. Or search your area / use Pin on Map.");
+      } else {
+        fail("Couldn't find your location. Check that your phone's Location (GPS) is on, or search your area / use Pin on Map.");
+      }
+    };
+    // Precise first; if that times out or is unavailable, accept a quicker, rougher reading.
+    navigator.geolocation.getCurrentPosition(ok, (err) => {
+      if (err.code === 1) return explain(err);
+      navigator.geolocation.getCurrentPosition(ok, explain, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
+    }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
   }
 
   /* Pin on Map: drag the map under a fixed centre pin, like delivery apps. */
