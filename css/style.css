@@ -560,6 +560,7 @@ body.has-cart-bar footer { padding-bottom: 110px; }
 .sheet__foot { padding: 14px 20px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }
 
 .product-hero { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 16px; }
+.product-hero--tall { aspect-ratio: 4 / 5; }
 .product-desc { color: var(--muted); line-height: 1.55; font-size: 14.5px; }
 .opt-group { margin-top: 18px; }
 .opt-group h3 { margin: 0 0 10px; font-size: 15px; display: flex; justify-content: space-between; }
@@ -726,6 +727,12 @@ footer {
 .sent h3 { margin: 14px 0 4px; font-family: var(--serif); font-size: 28px; }
 .sent__id { margin: 0 0 8px; font-size: 15px; }
 .sent__id b { letter-spacing: .04em; color: var(--cocoa); }
+.sent__actions { display: grid; gap: 6px; margin-top: 18px; text-align: center; }
+.sent__actions .btn { flex: none; width: 100%; }
+.sent__actions .btn svg { width: 20px; height: 20px; }
+.sent__actions .fine { margin: 0 0 12px; }
+.btn--chat { background: transparent; color: var(--ink, inherit); border: 1.5px solid var(--blush-deep); }
+.btn--chat svg { color: #25d366; }
 .sent__track { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; padding: 10px 16px; border-radius: 999px; border: 1.5px solid var(--blush-deep); color: var(--rose-dark); font-weight: 600; text-decoration: none; }
 .btn--light { background: var(--cream); color: var(--cocoa); border: 1.5px solid var(--line); }
 .chip-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 999px; border: 1.5px solid var(--line); background: #fff; color: var(--cocoa); font-weight: 600; font-size: 13.5px; text-decoration: none; }

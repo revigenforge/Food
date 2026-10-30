@@ -123,7 +123,7 @@ window.SITE = {
       eyebrow: "Six cities, six flavours",
       title: "Six Little Discoveries",
       text: "Six indulgent filled bonbons in one beautiful box",
-      image: "assets/img/bonbons.jpg",
+      image: "assets/img/bonbons-box.jpg",
       target: "six-little-discoveries",
       cities: ["Chennai"]
     },
@@ -148,6 +148,7 @@ window.SITE = {
    * Menu items.
    *   images:  1 or more photos (the first is shown on the menu card). Items without
    *            photos show a placeholder.
+   *   tallPhotos: true shows the product popup's photos in portrait (4:5) instead of wide.
    *   cities:  where it's sold (default: all cities)
    *   badge:   "bestseller" | "new" | "gifting" | "signature" (optional)
    *   options: the first group sets the base price ("price" per choice, optional "note"
@@ -252,9 +253,18 @@ window.SITE = {
       name: "Six Little Discoveries",
       badge: "new",
       cities: ["Chennai"],
-      images: ["assets/img/bonbons.jpg"],
+      images: [
+        "assets/img/bonbons-box.jpg",
+        "assets/img/bonbon-new-york.jpg",
+        "assets/img/bonbon-dubai.jpg",
+        "assets/img/bonbon-buenos-aires.jpg",
+        "assets/img/bonbon-paris.jpg",
+        "assets/img/bonbon-addis-ababa.jpg",
+        "assets/img/bonbon-zurich.jpg"
+      ],
+      tallPhotos: true, // the flavour names are printed at the top of the photos, so show them uncropped
       description:
-        "Six cities. Six flavours. One delicious journey. From Dubai-inspired Pistachio Kunafa to Swiss-inspired Rocher, discover six indulgent filled bonbons in one beautiful box.",
+        "Six cities. Six flavours. One delicious journey. Six indulgent filled bonbons in one beautiful box: New York Malted Milk, Dubai Pistachio Kunafa, Buenos Aires Salted Caramel Fudge, Paris Bueno Cream, Addis Ababa Mocha and Zurich Rocher.",
       options: [
         { name: "Box", choices: [
           { label: "Box of 6 bonbons", price: 600 }
@@ -267,6 +277,7 @@ window.SITE = {
     "assets/img/og-cookie-pie-tin.jpg",
     "assets/img/og-cookie-pie-cup.jpg",
     "assets/img/biscoff-banoffee.jpg",
+    "assets/img/bonbons-box.jpg",
     "assets/img/og-cookie-pie-full.jpg",
     "assets/img/cookie-pots.jpg",
     "assets/img/six-discoveries.jpg",

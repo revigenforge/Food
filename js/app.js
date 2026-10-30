@@ -548,7 +548,7 @@
         </div>
       </div>` : "";
     const o = openSheet(item.name,
-      `${galleryHtml(item, "product-hero")}
+      `${galleryHtml(item, item.tallPhotos ? "product-hero product-hero--tall" : "product-hero")}
        <p class="product-desc">${esc(item.description)}</p>${info}${groups}${ADDONS.length ? `<div data-addons>${addonsHtml(adds)}</div>` : ""}`,
       `<div class="foot-row">
          <div class="qty"><button type="button" data-q="-1" aria-label="Decrease">−</button><span>1</span><button type="button" data-q="1" aria-label="Increase">+</button></div>
@@ -1095,7 +1095,7 @@
       <p class="fine">${m.needsAddress
         ? `Delivery charges are calculated after entering the address, based on distance (within ${D.maxKm} km).`
         : "Pick it up yourself, or arrange your own delivery (Porter, Rapido, etc.) from our store."}${!P.upiId ? " Prices are confirmed when we accept your order." : P.payAfter === "placed"
-          ? " Pay by UPI right after placing your order. If we ever can't make it, we'll refund you in full."
+          ? " Pay by UPI right after placing your order."
           : " Prices are confirmed when we accept your order. Pay by UPI once your order is confirmed."}</p>
       <form class="form" novalidate>
         <h3>Order details</h3>
@@ -1317,23 +1317,37 @@
 
   function showSendSheet(msg, orderId, payNow) {
     const how = S.whatsapp ? "WhatsApp" : "Instagram";
-    const body = `
-      <div class="sent">
+    const chat = S.whatsapp
+      ? `<button class="btn btn--chat" type="button" data-final-send>${icon("whatsapp")} Chat with us on WhatsApp</button>`
+      : `<button class="btn btn--chat" type="button" data-final-send>${icon("instagram")} Chat with us on Instagram</button>`;
+    const head = `
         <div class="sent__icon">${icon(orderId ? "check" : "heart")}</div>
         <h3>${orderId ? "Almost done!" : "One last step"}</h3>
-        ${orderId ? `<p class="sent__id">Order ID <b>${esc(orderId)}</b></p>` : ""}
-        ${orderId && payNow
-          ? `<p class="fine">1. Send your order to us on ${how}.<br>2. Pay by UPI on your order page to confirm it.</p>`
-          : `<p class="fine">Send your order to us on ${how} and Zeen will confirm it.
-          ${orderId ? `Your order page updates as soon as it's confirmed${P.upiId ? ", and that's where you'll pay by UPI" : ""}.` : ""}</p>`}
-        ${orderId ? `<a class="sent__track" href="${esc(trackUrl(orderId))}">${icon(payNow ? "upi" : "receipt")} ${payNow ? "Pay now &amp; track order" : "View order status"}</a>` : ""}
-      </div>`;
-    const foot = S.whatsapp
-      ? `<button class="btn btn--wa" type="button" data-final-send>${icon("whatsapp")} Send order on WhatsApp</button>`
-      : `<button class="btn btn--ig" type="button" data-final-send>${icon("instagram")} Copy order &amp; open Instagram</button>`;
-    const o = openSheet("Your order", body, foot);
-    $("[data-final-send]", o).addEventListener("click", () => {
-      deliverMessage(msg);
+        ${orderId ? `<p class="sent__id">Order ID <b>${esc(orderId)}</b></p>` : ""}`;
+    let o;
+    if (orderId && payNow) {
+      // Pay first; chatting (with the order details filled in) is optional.
+      o = openSheet("Your order", `
+        <div class="sent">${head}
+          <div class="sent__actions">
+            <a class="btn" href="${esc(trackUrl(orderId))}" data-go-pay>${icon("upi")} Pay now &amp; track your order</a>
+            <p class="fine">Complete your payment and track your order online.</p>
+            ${chat}
+            <p class="fine">Have a question or need help? Chat with us before making payment.</p>
+          </div>
+        </div>`);
+    } else {
+      o = openSheet("Your order", `
+        <div class="sent">${head}
+          <p class="fine">Send your order to us on ${how} and Zeen will confirm it.
+            ${orderId ? `Your order page updates as soon as it's confirmed${P.upiId ? ", and that's where you'll pay by UPI" : ""}.` : ""}</p>
+          ${orderId ? `<a class="sent__track" href="${esc(trackUrl(orderId))}">${icon("receipt")} View order status</a>` : ""}
+        </div>`, S.whatsapp
+        ? `<button class="btn btn--wa" type="button" data-final-send>${icon("whatsapp")} Send order on WhatsApp</button>`
+        : `<button class="btn btn--ig" type="button" data-final-send>${icon("instagram")} Copy order &amp; open Instagram</button>`);
+    }
+    // The order is placed: start the next one fresh, whichever button the customer taps.
+    const done = () => {
       state.cart = [];
       saveCart();
       renderCards();
@@ -1343,7 +1357,10 @@
       store.set("details", details);
       lastPlaced = null;
       store.set("lastPlaced", null);
-    });
+    };
+    $("[data-final-send]", o).addEventListener("click", () => { deliverMessage(msg); done(); });
+    const pay = $("[data-go-pay]", o);
+    if (pay) pay.addEventListener("click", done);
   }
 
   function deliverMessage(msg) {
