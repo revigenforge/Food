@@ -241,6 +241,7 @@ window.SITE = {
       id: "biscoff-banoffee",
       category: "desserts",
       name: "Biscoff Banoffee",
+      diet: "veg",
       cities: ["Chennai"],
       images: ["assets/img/biscoff-banoffee-tin.jpg", "assets/img/biscoff-banoffee-jar.jpg"],
       tallPhotos: true,
