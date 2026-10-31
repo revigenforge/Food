@@ -1402,6 +1402,7 @@
     }
     if (!details.date) missing.push("date");
     else if (details.date < minDate()) missing.push(`a date from ${fmtDate(minDate())}`);
+    else if (!allSlots().some((t) => slotOpen(details.date, t))) missing.push("another date (no slots left for this day)");
     else if (!details.time || !allSlots().includes(details.time)) missing.push("a time slot");
     else if (!slotOpen(details.date, details.time)) missing.push(`a later time slot (we need about ${(S.orderInfo && S.orderInfo.prepHours) || 2} hours to prepare)`);
     if (missing.length) {
