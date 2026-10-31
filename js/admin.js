@@ -28,7 +28,7 @@
   let knownNew = null;
   let timer = null;
   let seen = null; // last snapshot, to spot new orders and payments between refreshes
-  const POLL_MS = 10000;
+  const POLL_MS = 20000; // also refreshes straight away whenever the dashboard comes back on screen
   const root = () => $("#admin");
 
   async function api(method, body) {

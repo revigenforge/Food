@@ -85,7 +85,7 @@ If CallMeBot is slow or down, the order is still saved.
 
 It also alerts him when a customer **taps Pay** ("💳 … is paying ₹X right now") and when they **submit the UPI transaction ID** ("✅ Payment submitted, Ref …").
 
-While the dashboard is open it refreshes every 10 seconds and beeps, vibrates and shows a phone notification for new orders, customers paying and submitted payments; orders being paid show **Paying now…**.
+While the dashboard is open it refreshes every 20 seconds (and straight away when it comes back on screen) and beeps, vibrates and shows a phone notification for new orders, customers paying and submitted payments; orders being paid show **Paying now…**.
 
 1. On Zeen's phone: follow CallMeBot's WhatsApp instructions (save their number, send them the activation message) and note the **API key** they reply with.
 2. In Vercel → Environment Variables: `OWNER_WHATSAPP` = his number with country code (e.g. `919876543210`), `CALLMEBOT_APIKEY` = the key. Redeploy.
