@@ -20,7 +20,7 @@ window.SITE = {
   email: "",
 
   cities: ["Chennai", "Bengaluru"],
-  hours: "Prep time 2 hrs · Dispatch slots 5 PM – 9 PM",
+  hours: "5 PM – 9 PM",
   leadDays: 0, // 0 = same-day orders allowed (slots within the prep time are hidden)
 
   // Shown in every product's details.
@@ -274,6 +274,23 @@ window.SITE = {
       ]
     }
   ],
+
+  /*
+   * Where the dessert sits in a photo, so cropped views (menu cards, popups, banners,
+   * gallery) keep it in frame: "left-right% top-bottom%" (0% = left/top, 100% = right/bottom).
+   * Photos not listed are centred.
+   */
+  photoFocus: {
+    "assets/img/og-cookie-pie-tin.jpg": "50% 60%",
+    "assets/img/og-cookie-pie-cup.jpg": "55% 60%",
+    "assets/img/caramel-crunch-tin.jpg": "50% 90%",
+    "assets/img/caramel-crunch-box.jpg": "50% 95%",
+    "assets/img/biscoff-banoffee-pie.jpg": "50% 55%",
+    "assets/img/biscoff-banoffee-jar.jpg": "50% 80%",
+    "assets/img/biscoff-caramel-crunch.jpg": "50% 85%",
+    "assets/img/tres-leches.jpg": "50% 20%",
+    "assets/img/bonbons-box.jpg": "60% 45%"
+  },
 
   gallery: [
     "assets/img/og-cookie-pie-tin.jpg",

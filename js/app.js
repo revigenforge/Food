@@ -104,13 +104,15 @@
   const PLACEHOLDER_IMG = "assets/img/placeholder.jpg";
   const imagesOf = (item) => (item.images && item.images.length ? item.images : item.image ? [item.image] : [PLACEHOLDER_IMG]);
   const imageOf = (item) => imagesOf(item)[0];
+  // Keeps the dessert in frame when a photo is cropped (S.photoFocus).
+  const focus = (src) => (S.photoFocus && S.photoFocus[src] ? ` style="object-position:${esc(S.photoFocus[src])}"` : "");
   // Swipeable photos (scroll-snap) with dots, plus arrows for mouse users.
   function galleryHtml(item, cls, attrs = "") {
     const imgs = imagesOf(item);
-    if (imgs.length < 2) return `<img class="${cls}" src="${esc(imgs[0])}" alt="${esc(item.name)}" loading="lazy" ${attrs}>`;
+    if (imgs.length < 2) return `<img class="${cls}" src="${esc(imgs[0])}"${focus(imgs[0])} alt="${esc(item.name)}" loading="lazy" ${attrs}>`;
     return `
       <div class="swipe" data-swipe>
-        <div class="swipe__track">${imgs.map((src, i) => `<img class="${cls}" src="${esc(src)}" alt="${esc(item.name)} photo ${i + 1}" loading="lazy" ${attrs}>`).join("")}</div>
+        <div class="swipe__track">${imgs.map((src, i) => `<img class="${cls}" src="${esc(src)}"${focus(src)} alt="${esc(item.name)} photo ${i + 1}" loading="lazy" ${attrs}>`).join("")}</div>
         <button type="button" class="swipe__arrow swipe__arrow--prev" data-swipe-go="-1" aria-label="Previous photo">${icon("left")}</button>
         <button type="button" class="swipe__arrow swipe__arrow--next" data-swipe-go="1" aria-label="Next photo">${icon("right")}</button>
         <div class="swipe__dots">${imgs.map((_, i) => `<span class="${i ? "" : "on"}"></span>`).join("")}</div>
@@ -370,7 +372,7 @@
           <p class="slide__desc">${esc(b.text)}</p>
           <span class="slide__cta">Order now</span>
         </div>
-        <div class="slide__img"><img src="${esc(b.image)}" alt="${esc(b.title)}" loading="lazy"></div>
+        <div class="slide__img"><img src="${esc(b.image)}"${focus(b.image)} alt="${esc(b.title)}" loading="lazy"></div>
       </button>`).join("");
     dots.innerHTML = cityBanners().length > 1 ? cityBanners().map((_, i) => `<span class="${i ? "" : "on"}"></span>`).join("") : "";
     wrap.scrollLeft = 0;
@@ -1065,7 +1067,7 @@
       const { item, opts, total } = lineText(l);
       return `
         <div class="cart-item">
-          <img src="${esc(imageOf(item))}" alt="">
+          <img src="${esc(imageOf(item))}"${focus(imageOf(item))} alt="">
           <div class="cart-item__info">
             <p class="cart-item__name">${esc(item.name)}</p>
             <p class="cart-item__opts">${esc(opts)}</p>
@@ -1733,7 +1735,7 @@
   /* ---------- Gallery page ---------- */
   function initGallery() {
     const g = $(".gallery");
-    g.innerHTML = S.gallery.map((src) => `<button type="button" data-src="${esc(src)}"><img src="${esc(src)}" alt="" loading="lazy"></button>`).join("");
+    g.innerHTML = S.gallery.map((src) => `<button type="button" data-src="${esc(src)}"><img src="${esc(src)}"${focus(src)} alt="" loading="lazy"></button>`).join("");
     g.addEventListener("click", (e) => {
       const b = e.target.closest("[data-src]");
       if (!b) return;
