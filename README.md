@@ -68,7 +68,7 @@ Until `upiId` is a real UPI ID, the order page says online payment isn't active 
 
 ### Time slots, prep time and gift add-ons
 
-- Checkout offers 30-minute slots (`slots` in `js/config.js`, 5–9 PM). For same-day orders, slots within the prep time (`orderInfo.prepHours`) are greyed out.
+- Checkout offers 30-minute slots (`slots` in `js/config.js`, 6–9 PM). For same-day orders, slots within the prep time (`orderInfo.prepHours`) are greyed out.
 - Every product shows the prep time, first dispatch slot and the "need it urgently?" note (`orderInfo`).
 - The product popup offers add-ons (`giftAddons`): gift note, chocolate message (20 characters), candles, roses, bouquet. They're attached to that product, added to the total and listed under it on the order.
 - Delivery and gift orders can upgrade to **Owner's VIP Delivery 👑** (`delivery.vip`, ₹5,000 flat instead of the distance charge).

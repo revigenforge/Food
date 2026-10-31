@@ -20,18 +20,18 @@ window.SITE = {
   email: "",
 
   cities: ["Chennai", "Bengaluru"],
-  hours: "5 PM – 9 PM",
+  hours: "6 PM – 9 PM",
   leadDays: 0, // 0 = same-day orders allowed (slots within the prep time are hidden)
 
   // Shown in every product's details.
   orderInfo: {
     prepHours: 2,
-    firstDispatch: "5 PM",
+    firstDispatch: "6 PM",
     urgent: "Need it urgently? If your order is time-sensitive, please DM us on Instagram or call us directly. We'll do our best to accommodate your request, subject to availability."
   },
 
   // Pick-up / delivery time slots offered at checkout.
-  slots: { start: "17:00", end: "21:00", minutes: 30 },
+  slots: { start: "18:00", end: "21:00", minutes: 30 },
 
   /*
    * Gift add-ons, offered when the customer picks "Send as a Gift".
