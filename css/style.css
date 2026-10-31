@@ -493,7 +493,13 @@ main { padding: 16px; }
   .card__media img { height: 118px; }
   .add-btn { width: 96px; }
   .brand__name { font-size: 26px; }
+}
+/* Phones: the Gallery button shows its icon only, so it never runs into the logo. */
+@media (max-width: 600px) {
   .head-btn span.lbl { display: none; }
+}
+@media (max-width: 440px) {
+  .brand__name { font-size: 26px; }
 }
 
 /* ---------- Floating cart bar ---------- */

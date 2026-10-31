@@ -131,7 +131,7 @@ window.SITE = {
       eyebrow: "For true caramel lovers",
       title: "Caramel Crunch Cake",
       text: "Chocolate cake, silky caramel, dark ganache, walnuts",
-      image: "assets/img/caramel-crunch.jpg",
+      image: "assets/img/caramel-crunch-tin.jpg",
       target: "caramel-crunch-cake",
       cities: ["Chennai"]
     }
@@ -185,7 +185,8 @@ window.SITE = {
       category: "cakes",
       name: "Caramel Crunch Cake",
       cities: ["Chennai"],
-      images: ["assets/img/caramel-crunch.jpg"],
+      images: ["assets/img/caramel-crunch-tin.jpg", "assets/img/caramel-crunch-box.jpg"],
+      tallPhotos: true,
       description:
         "Soft, moist chocolate cake layered with silky caramel and rich dark chocolate ganache, with a layer of walnuts in between. Finished with a crisp milk chocolate crunch, every bite is pure indulgence.",
       options: [
@@ -201,7 +202,7 @@ window.SITE = {
       category: "cakes",
       name: "Tres Leches Cake",
       cities: ["Chennai"],
-      images: [],
+      images: ["assets/img/tres-leches.jpg"],
       description:
         "A soft, melt-in-your-mouth sponge soaked in its own signature milk blend for an irresistibly moist and creamy bite.",
       options: [
@@ -220,7 +221,7 @@ window.SITE = {
       category: "desserts",
       name: "Ina Garten Brownie Pudding",
       cities: ["Chennai"],
-      images: [],
+      images: ["assets/img/brownie-pudding.jpg", "assets/img/brownie-pudding-tin.jpg"],
       description:
         "A rich, fudgy chocolate brownie baked until the top is crackly and the centre stays soft, gooey and scoopable. Deeply chocolatey, best enjoyed warm, and even better with a scoop of ice cream.",
       options: [
@@ -236,7 +237,8 @@ window.SITE = {
       category: "desserts",
       name: "Biscoff Banoffee",
       cities: ["Chennai"],
-      images: ["assets/img/biscoff-banoffee.jpg"],
+      images: ["assets/img/biscoff-banoffee-pie.jpg", "assets/img/biscoff-banoffee-jar.jpg"],
+      tallPhotos: true,
       description:
         "A buttery Biscoff biscuit base layered with silky dulce de leche, fresh bananas and whipped cream infused with cream cheese, finished with a Biscoff crumble. Sweet, creamy and indulgent in every bite.",
       options: [
@@ -276,7 +278,11 @@ window.SITE = {
   gallery: [
     "assets/img/og-cookie-pie-tin.jpg",
     "assets/img/og-cookie-pie-cup.jpg",
-    "assets/img/biscoff-banoffee.jpg",
+    "assets/img/biscoff-banoffee-pie.jpg",
+    "assets/img/caramel-crunch-tin.jpg",
+    "assets/img/brownie-pudding.jpg",
+    "assets/img/tres-leches.jpg",
+    "assets/img/biscoff-banoffee-jar.jpg",
     "assets/img/bonbons-box.jpg",
     "assets/img/og-cookie-pie-full.jpg",
     "assets/img/cookie-pots.jpg",
