@@ -74,6 +74,8 @@ Until `upiId` is a real UPI ID, the order page says online payment isn't active 
 - Delivery and gift orders can upgrade to **Owner's VIP Delivery 👑** (`delivery.vip`, ₹5,000 flat instead of the distance charge).
 - OG Cookie Pie lets customers mix flavours: up to `flavours` per size (Couples 2, Family 3, Celebration 3). Adding Nutella (a `premium` flavour) switches to the size's `premiumPrice`.
 - Items can be limited to some cities (`cities`; Bengaluru only has the OG Cookie Pie) and can have several photos (`images`).
+- `prepDays: 1` marks items that need a day (Brownie Pudding, Tres Leches, Caramel Crunch Cake): their popup says "Prep time 1 day", and an order containing one can't be for today.
+- `diet: "egg"` / `"veg"` shows a yellow egg or green eggless mark next to the item's name.
 
 ### WhatsApp alert for new orders
 

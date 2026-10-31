@@ -102,6 +102,9 @@
 
   const saveCart = () => { store.set("cart", state.cart); renderCartCount(); };
   const findItem = (id) => S.items.find((i) => i.id === id);
+  // Egg / eggless mark (item.diet), like the food marks on Indian packaging.
+  const DIET = { egg: "Contains egg", veg: "Eggless (vegetarian)" };
+  const dietMark = (item) => (DIET[item.diet] ? `<span class="diet diet--${item.diet}" role="img" aria-label="${DIET[item.diet]}" title="${DIET[item.diet]}"></span>` : "");
   const PLACEHOLDER_IMG = "assets/img/placeholder.jpg";
   const imagesOf = (item) => (item.images && item.images.length ? item.images : item.image ? [item.image] : [PLACEHOLDER_IMG]);
   const imageOf = (item) => imagesOf(item)[0];
@@ -429,7 +432,7 @@
       <article class="card" id="item-${esc(item.id)}">
         <div class="card__body">
           ${badge ? `<span class="tag tag--${item.badge}">${icon(badge[0])}${badge[1]}</span>` : ""}
-          <h3 class="card__name">${esc(item.name)}</h3>
+          <h3 class="card__name">${dietMark(item)}${esc(item.name)}</h3>
           <p class="card__desc">${esc(item.description)}</p>
           <div class="card__price">
             <span class="price">${rupee(lo)}</span>
@@ -543,7 +546,8 @@
       </div>`).join("");
     const info = S.orderInfo ? `
       <div class="prep-info">
-        <div><span>${icon("clock")} Prep time <b>${S.orderInfo.prepHours} hrs</b></span><span>${icon("truck")} First dispatch slot <b>${esc(S.orderInfo.firstDispatch)}</b></span></div>
+        <div><span>${icon("clock")} Prep time <b>${item.prepDays ? `${item.prepDays} day${item.prepDays > 1 ? "s" : ""}` : `${S.orderInfo.prepHours} hrs`}</b></span><span>${icon("truck")} First dispatch slot <b>${item.prepDays ? `${item.prepDays > 1 ? `In ${item.prepDays} days` : "Tomorrow"}, ${esc(S.orderInfo.firstDispatch)}` : esc(S.orderInfo.firstDispatch)}</b></span></div>
+        ${item.prepDays ? `<p class="prep-info__note">Made fresh to order: order today, ready from ${item.prepDays > 1 ? `${item.prepDays} days later` : "tomorrow"}.</p>` : ""}
         <p>${esc(S.orderInfo.urgent)}</p>
         <div class="prep-info__links">
           <a href="${igDm}" target="_blank" rel="noopener">${icon("instagram")} DM us</a>
@@ -552,6 +556,7 @@
       </div>` : "";
     const o = openSheet(item.name,
       `${galleryHtml(item, item.tallPhotos ? "product-hero product-hero--tall" : "product-hero")}
+       ${DIET[item.diet] ? `<p class="product-diet">${dietMark(item)} ${DIET[item.diet]}</p>` : ""}
        <p class="product-desc">${esc(item.description)}</p>${info}${groups}${ADDONS.length ? `<div data-addons>${addonsHtml(adds)}</div>` : ""}`,
       `<div class="foot-row">
          <div class="qty"><button type="button" data-q="-1" aria-label="Decrease">−</button><span>1</span><button type="button" data-q="1" aria-label="Increase">+</button></div>
@@ -627,9 +632,11 @@
   Object.keys(DETAIL_DEFAULTS).forEach((k) => { if (typeof details[k] !== "string") details[k] = ""; });
 
   const localDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  // Items that need a day or more (item.prepDays) push the earliest date for the whole order.
+  const slowItems = () => [...new Set(state.cart.map((l) => findItem(l.id)).filter((i) => i && i.prepDays))];
   function minDate() {
     const d = new Date();
-    d.setDate(d.getDate() + (S.leadDays || 0));
+    d.setDate(d.getDate() + Math.max(S.leadDays || 0, ...slowItems().map((i) => i.prepDays)));
     return localDate(d);
   }
 
@@ -658,6 +665,7 @@
   function slotsHtml() {
     const date = details.date;
     if (!date) return `<p class="fine">Choose a date to see the available slots.</p>`;
+    if (date < minDate()) return `<p class="fine">${slowItems().length ? `${esc(slowItems().map((i) => i.name).join(" and "))} need${slowItems().length > 1 ? "" : "s"} a day to prepare. ` : ""}Please choose a date from ${fmtDate(minDate())}.</p>`;
     const list = allSlots();
     const open = list.filter((t) => slotOpen(date, t));
     if (!open.length) return `<p class="fine">No slots left for this date. Please choose another day.</p>`;
@@ -1070,7 +1078,7 @@
         <div class="cart-item">
           <img src="${esc(imageOf(item))}"${focus(imageOf(item))} alt="">
           <div class="cart-item__info">
-            <p class="cart-item__name">${esc(item.name)}</p>
+            <p class="cart-item__name">${dietMark(item)}${esc(item.name)}</p>
             <p class="cart-item__opts">${esc(opts)}</p>
             ${lineAddons(l).map((a) => `<p class="cart-item__addon">+ ${esc(a.name)}${a.qty > 1 ? ` × ${a.qty}` : ""}${a.message ? ` “${esc(a.message)}”` : ""} <b>${rupee(a.total)}</b></p>`).join("")}
             <div class="cart-item__row">
@@ -1402,7 +1410,10 @@
       return;
     }
     if (!details.date) missing.push("date");
-    else if (details.date < minDate()) missing.push(`a date from ${fmtDate(minDate())}`);
+    else if (details.date < minDate()) {
+      const slow = slowItems();
+      missing.push(`a date from ${fmtDate(minDate())}${slow.length ? ` (${slow.map((i) => i.name).join(" and ")} ${slow.length > 1 ? "need" : "needs"} a day to prepare)` : ""}`);
+    }
     else if (!allSlots().some((t) => slotOpen(details.date, t))) missing.push("another date (no slots left for this day)");
     else if (!details.time || !allSlots().includes(details.time)) missing.push("a time slot");
     else if (!slotOpen(details.date, details.time)) missing.push(`a later time slot (we need about ${(S.orderInfo && S.orderInfo.prepHours) || 2} hours to prepare)`);

@@ -149,6 +149,8 @@ window.SITE = {
    *   images:  1 or more photos (the first is shown on the menu card). Items without
    *            photos show a placeholder.
    *   tallPhotos: true shows the product popup's photos in portrait (4:5) instead of wide.
+   *   diet:    "egg" (yellow egg mark) or "veg" (green eggless mark), shown next to the name.
+   *   prepDays: 1 = needs a day to prepare: orders with it can't be for today.
    *   cities:  where it's sold (default: all cities)
    *   badge:   "bestseller" | "new" | "gifting" | "signature" (optional)
    *   options: the first group sets the base price ("price" per choice, optional "note"
@@ -162,6 +164,7 @@ window.SITE = {
       id: "og-cookie-pie",
       category: "cookie-pies",
       name: "OG Cookie Pie",
+      diet: "egg",
       badge: "bestseller",
       images: ["assets/img/og-cookie-pie-tin.jpg", "assets/img/og-cookie-pie-cup.jpg"],
       description:
@@ -184,6 +187,8 @@ window.SITE = {
       id: "caramel-crunch-cake",
       category: "cakes",
       name: "Caramel Crunch Cake",
+      diet: "veg",
+      prepDays: 1,
       cities: ["Chennai"],
       images: ["assets/img/caramel-crunch-tin.jpg", "assets/img/caramel-crunch-box.jpg"],
       tallPhotos: true,
@@ -191,8 +196,6 @@ window.SITE = {
         "Soft, moist chocolate cake layered with silky caramel and rich dark chocolate ganache, with a layer of walnuts in between. Finished with a crisp milk chocolate crunch, every bite is pure indulgence.",
       options: [
         { name: "Size", choices: [
-          { label: "Couples", note: "Serves 1–2", price: 399 },
-          { label: "Deluxe", note: "Serves 3–4", price: 750 },
           { label: "Family", note: "Serves 5–6", price: 1200 }
         ] }
       ]
@@ -201,6 +204,8 @@ window.SITE = {
       id: "tres-leches-cake",
       category: "cakes",
       name: "Tres Leches Cake",
+      diet: "egg",
+      prepDays: 1,
       cities: ["Chennai"],
       images: ["assets/img/tres-leches.jpg", "assets/img/tres-leches-biscoff.jpg"],
       description:
@@ -220,15 +225,15 @@ window.SITE = {
       id: "brownie-pudding",
       category: "desserts",
       name: "Ina Garten Brownie Pudding",
+      diet: "egg",
+      prepDays: 1,
       cities: ["Chennai"],
       images: ["assets/img/brownie-pudding.jpg", "assets/img/brownie-pudding-tin.jpg"],
       description:
         "A rich, fudgy chocolate brownie baked until the top is crackly and the centre stays soft, gooey and scoopable. Deeply chocolatey, best enjoyed warm, and even better with a scoop of ice cream.",
       options: [
         { name: "Size", choices: [
-          { label: "Couples", price: 499 },
-          { label: "Family", price: 999 },
-          { label: "Celebration", price: 1999 }
+          { label: "Family", price: 999 }
         ] }
       ]
     },
@@ -253,6 +258,7 @@ window.SITE = {
       id: "six-little-discoveries",
       category: "chocolates",
       name: "Six Little Discoveries",
+      diet: "veg",
       badge: "new",
       cities: ["Chennai"],
       images: [
