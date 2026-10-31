@@ -63,7 +63,7 @@ After paying, the customer enters the UPI transaction ID / UTR. The order shows 
 Zeen checks his UPI or bank app and taps **Mark as paid**, and the customer's page shows **Paid**. If the delivery charge is "to be confirmed" (beyond 30 km, or maps were down), the customer pays once Zeen sets the final total. If Zeen cancels a paid order, the dashboard reminds him to refund it. The WhatsApp updates include a payment request or a thank-you.
 
 Set it up under `payment` in `js/config.js`: `upiId` (a business UPI ID works best with Google Pay), the payee name,
-an optional `qrImage` (Zeen's own QR scanner image), when customers can pay (`payAfter`) and `advancePercent`.
+`qrImage` (Zeen's own Google Pay QR, shown on the order page with a Save QR button), when customers can pay (`payAfter`) and `advancePercent`.
 Until `upiId` is a real UPI ID, the order page says online payment isn't active yet.
 
 ### Time slots, prep time and gift add-ons

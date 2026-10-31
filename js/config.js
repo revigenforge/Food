@@ -99,7 +99,7 @@ window.SITE = {
   payment: {
     upiId: "shehzeenkhatija@oksbi",
     payeeName: "Shehzeen Khatija", // should match the name on the UPI account
-    qrImage: "",
+    qrImage: "assets/img/upi-qr.jpg", // Zeen's Google Pay QR (checked: shehzeenkhatija@oksbi)
     payAfter: "placed",
     advancePercent: 100
   },
