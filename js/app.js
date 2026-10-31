@@ -1518,7 +1518,7 @@
       const c = e.target.closest("[data-copy-text]");
       if (c) navigator.clipboard.writeText(c.dataset.copyText).then(() => toast("UPI ID copied"), () => prompt("UPI ID:", c.dataset.copyText));
       // Opening the UPI app, copying the UPI ID or showing the QR = about to pay: let Zeen know.
-      if (last && (e.target.closest(".btn--upi") || c || (e.target.closest(".pay__more summary") && !e.target.closest(".pay--submitted")))) signalPaying(last);
+      if (last && (e.target.closest(".btn--upi, .pay__app, .pay__save") || c || (e.target.closest(".pay__more summary") && !e.target.closest(".pay--submitted")))) signalPaying(last);
     });
     root.addEventListener("submit", async (e) => {
       const form = e.target.closest("[data-pay-form]");
@@ -1625,17 +1625,34 @@
       return `<section class="pay pay--wait"><div class="pay__head">${icon("upi")}<div><h2>Pay ${label}</h2><p>Online UPI payment isn't active yet. Zeen will share payment details on chat.</p></div></div></section>`;
     }
     const mobile = matchMedia("(pointer: coarse)").matches;
-    const qr = P.qrImage
-      ? `<img class="pay__qr-img pay__qr-img--card" src="${esc(P.qrImage)}" alt="UPI QR code for ${esc(P.payeeName || S.name)}">
-         <a class="chip-btn pay__save" href="${esc(P.qrImage)}" download="Sweetly-Yours-UPI-QR.jpg">${icon("download")} Save QR</a>
-         <p class="fine">Scan with any UPI app, enter <b>${rupee(amt)}</b> and add <b>${esc(o.id)}</b> in the note.${mobile ? " Paying on this phone? Save the QR, then use “scan from gallery” in your UPI app." : ""}</p>`
-      : `<div class="pay__qr" data-qr></div><p class="fine">Scan with any UPI app. The amount is filled in.</p>`;
+    const upiBtn = (cls, text) => (upiActive() ? `<a class="btn ${cls}" href="${esc(upiLink(o))}">${icon("upi")} ${text}</a>` : "");
+    const upiId = upiActive() ? `<div class="pay__id"><span>UPI ID <b>${esc(P.upiId)}</b></span><button class="chip-btn" type="button" data-copy-text="${esc(P.upiId)}">${icon("copy")} Copy</button></div>` : "";
+    if (P.qrImage) {
+      // Zeen's own QR is the main way to pay (it works in every UPI app); the app link is a backup.
+      return `
+      <section class="pay">
+        <div class="pay__head">${icon("upi")}<div><h2>Pay ${label}</h2><p>Scan the QR with any UPI app, then enter the transaction ID below so Zeen can verify it.</p></div></div>
+        <div class="pay__qr-wrap">
+          <img class="pay__qr-img pay__qr-img--card" src="${esc(P.qrImage)}" alt="UPI QR code for ${esc(P.payeeName || S.name)}">
+          <a class="${mobile ? "btn" : "chip-btn"} pay__save" href="${esc(P.qrImage)}" download="Sweetly-Yours-UPI-QR.jpg">${icon("download")} Save QR</a>
+        </div>
+        <ol class="pay__steps">
+          <li>${mobile ? "Save the QR, open GPay / PhonePe / Paytm and choose <b>scan from gallery</b> (or scan it from another phone)." : "Scan the QR with GPay / PhonePe / Paytm on your phone."}</li>
+          <li>Enter <b>${rupee(amt)}</b> and add <b>${esc(o.id)}</b> in the note.</li>
+          <li>Enter the UPI transaction ID below.</li>
+        </ol>
+        ${upiId}
+        ${upiBtn("btn--light pay__app", "Or open your UPI app with the amount filled in")}
+        ${refForm("Paid? Enter the UPI transaction ID / UTR")}
+      </section>`;
+    }
+    const qr = `<div class="pay__qr" data-qr></div><p class="fine">Scan with any UPI app. The amount is filled in.</p>`;
     return `
       <section class="pay">
         <div class="pay__head">${icon("upi")}<div><h2>Pay ${label}</h2><p>Pay by UPI, then enter the transaction ID below so Zeen can verify it.</p></div></div>
-        ${upiActive() ? `<a class="btn btn--upi" href="${esc(upiLink(o))}">${icon("upi")} Pay with GPay / PhonePe / Paytm</a>` : ""}
-        ${mobile && upiActive() && !P.qrImage ? `<details class="pay__more"><summary>Show QR code</summary>${qr}</details>` : `<div class="pay__qr-wrap">${qr}</div>`}
-        ${upiActive() ? `<div class="pay__id"><span>UPI ID <b>${esc(P.upiId)}</b></span><button class="chip-btn" type="button" data-copy-text="${esc(P.upiId)}">${icon("copy")} Copy</button></div>` : ""}
+        ${upiBtn("btn--upi", "Pay with GPay / PhonePe / Paytm")}
+        ${mobile && upiActive() ? `<details class="pay__more"><summary>Show QR code</summary>${qr}</details>` : `<div class="pay__qr-wrap">${qr}</div>`}
+        ${upiId}
         ${refForm("Paid? Enter the UPI transaction ID / UTR")}
       </section>`;
   }

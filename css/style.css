@@ -841,7 +841,11 @@ body[data-page="admin"] main { padding-top: 6px; max-width: 760px; }
 .pay__qr-wrap { text-align: center; }
 .pay__qr, .pay__qr-img { width: 216px; margin: 0 auto; padding: 8px; background: #fff; border-radius: 12px; border: 1px solid var(--line); }
 .pay__qr-img--card { display: block; width: min(300px, 100%); padding: 0; border: 0; border-radius: 14px; box-shadow: 0 2px 10px rgba(107,58,44,.12); }
-.pay__save { display: inline-flex; margin: 10px auto 0; }
+.pay__save { display: inline-flex; margin: 12px auto 0; }
+.pay__save.btn { display: flex; width: min(300px, 100%); flex: none; }
+.pay__steps { margin: 4px 0 0; padding-left: 22px; font-size: 14px; line-height: 1.6; color: var(--ink); }
+.pay__steps li { margin: 2px 0; }
+.pay__app { flex: none; width: 100%; min-height: 46px; font-size: 14px; font-weight: 600; }
 .pay__qr img, .pay__qr canvas { margin: 0 auto; }
 .pay__more summary { cursor: pointer; font-weight: 600; color: var(--rose-dark); font-size: 14px; }
 .pay__more[open] summary { margin-bottom: 12px; }
