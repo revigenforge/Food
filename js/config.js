@@ -202,7 +202,7 @@ window.SITE = {
       category: "cakes",
       name: "Tres Leches Cake",
       cities: ["Chennai"],
-      images: ["assets/img/tres-leches.jpg"],
+      images: ["assets/img/tres-leches.jpg", "assets/img/tres-leches-biscoff.jpg"],
       description:
         "A soft, melt-in-your-mouth sponge soaked in its own signature milk blend for an irresistibly moist and creamy bite.",
       options: [
@@ -237,7 +237,7 @@ window.SITE = {
       category: "desserts",
       name: "Biscoff Banoffee",
       cities: ["Chennai"],
-      images: ["assets/img/biscoff-banoffee-pie.jpg", "assets/img/biscoff-banoffee-jar.jpg"],
+      images: ["assets/img/biscoff-banoffee-tin.jpg", "assets/img/biscoff-banoffee-jar.jpg"],
       tallPhotos: true,
       description:
         "A buttery Biscoff biscuit base layered with silky dulce de leche, fresh bananas and whipped cream infused with cream cheese, finished with a Biscoff crumble. Sweet, creamy and indulgent in every bite.",
@@ -285,9 +285,9 @@ window.SITE = {
     "assets/img/og-cookie-pie-cup.jpg": "55% 60%",
     "assets/img/caramel-crunch-tin.jpg": "50% 90%",
     "assets/img/caramel-crunch-box.jpg": "50% 95%",
-    "assets/img/biscoff-banoffee-pie.jpg": "50% 55%",
+    "assets/img/tres-leches-biscoff.jpg": "50% 55%",
     "assets/img/biscoff-banoffee-jar.jpg": "50% 80%",
-    "assets/img/biscoff-caramel-crunch.jpg": "50% 85%",
+    "assets/img/biscoff-banoffee-tin.jpg": "50% 85%",
     "assets/img/tres-leches.jpg": "50% 20%",
     "assets/img/bonbons-box.jpg": "60% 45%"
   },
@@ -295,11 +295,12 @@ window.SITE = {
   gallery: [
     "assets/img/og-cookie-pie-tin.jpg",
     "assets/img/og-cookie-pie-cup.jpg",
-    "assets/img/biscoff-banoffee-pie.jpg",
+    "assets/img/tres-leches-biscoff.jpg",
     "assets/img/caramel-crunch-tin.jpg",
     "assets/img/brownie-pudding.jpg",
     "assets/img/tres-leches.jpg",
     "assets/img/biscoff-banoffee-jar.jpg",
+    "assets/img/biscoff-banoffee-tin.jpg",
     "assets/img/bonbons-box.jpg",
     "assets/img/og-cookie-pie-full.jpg",
     "assets/img/cookie-pots.jpg",
