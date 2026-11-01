@@ -28,11 +28,12 @@
   let knownNew = null;
   let timer = null;
   let seen = null; // last snapshot, to spot new orders and payments between refreshes
+  let calendarOn = false, calendarResult = ""; // Google Calendar sync status + last test result
   const POLL_MS = 20000; // also refreshes straight away whenever the dashboard comes back on screen
   const root = () => $("#admin");
 
-  async function api(method, body) {
-    const res = await fetch("api/admin", {
+  async function api(method, body, query = "") {
+    const res = await fetch("api/admin" + query, {
       method,
       headers: { Authorization: `Bearer ${password}`, ...(body ? { "Content-Type": "application/json" } : {}) },
       body: body ? JSON.stringify(body) : undefined,
@@ -133,6 +134,7 @@
       if (fromLogin) store.set("admin_pw", password);
       const changed = JSON.stringify(data.orders || []) !== JSON.stringify(orders);
       orders = data.orders || [];
+      calendarOn = !!data.calendarSync;
       announce(orders);
       const newCount = orders.filter((o) => o.status === "placed").length;
       if (knownNew !== null && newCount > knownNew) toast(`${newCount - knownNew} new order${newCount - knownNew > 1 ? "s" : ""}!`);
@@ -347,14 +349,33 @@
       </nav>
       <div class="ad-list">
         ${list.map(cardHtml).join("") || `<p class="empty">No ${filter === "all" ? "" : FILTERS.find((f) => f[0] === filter)[1].toLowerCase() + " "}orders yet.</p>`}
-      </div>`;
+      </div>
+      <section class="ad-cal">
+        <p>${icon("clock")} Google Calendar sync: <b>${calendarOn ? "set up" : "not set up"}</b></p>
+        <button type="button" class="chip-btn" data-cal-test>Test Google Calendar</button>
+        <div data-cal-result>${calendarResult}</div>
+      </section>`;
     $$("details", root()).forEach((d) => {
       if (open.has(d.closest("[data-id]").dataset.id + d.className)) d.open = true;
     });
   }
 
   /* ---------- Events ---------- */
+  async function testCalendar(btn) {
+    btn.disabled = true;
+    btn.textContent = "Testing…";
+    let r;
+    try { r = await api("GET", null, "?calendarTest=1"); } catch (e) { r = { ok: false, problem: e.message }; }
+    calendarResult = r.ok
+      ? `<p class="ad-cal__ok">✅ Working! A test event was added to the calendar for ${esc(fmtTime(Date.parse(r.at)))} today. New orders will appear at their slot.</p>`
+      : `<p class="ad-cal__err">❌ ${esc(r.problem || "Unknown problem")}</p>`;
+    if (r.who) calendarResult += `<p class="fine">${esc(r.who)}</p>`;
+    render();
+  }
+
   document.addEventListener("click", (e) => {
+    const ct = e.target.closest("[data-cal-test]");
+    if (ct) { testCalendar(ct); return; }
     if (e.target.closest("[data-alert-bar]")) { unlockAlerts(true); toast("Alerts are on. Keep this page open."); return; }
     if (!audio || audio.state !== "running") unlockAlerts(); // any tap enables sound
     const f = e.target.closest("[data-filter]");

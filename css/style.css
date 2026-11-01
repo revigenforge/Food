@@ -988,3 +988,10 @@ body[data-page="admin"] main { padding-top: 6px; max-width: 760px; }
 .diet--veg { color: #2e8b3e; }
 .product-diet { display: flex; align-items: center; margin: 12px 0 0; font-size: 13px; font-weight: 600; color: var(--muted); }
 .prep-info__note { margin: 6px 0 0; font-weight: 600; color: var(--cocoa); }
+
+/* Dashboard: Google Calendar test */
+.ad-cal { margin: 24px 0 8px; padding: 14px 16px; border-radius: 14px; background: #fff; border: 1px solid var(--line); display: grid; gap: 8px; justify-items: start; font-size: 14px; }
+.ad-cal p { margin: 0; display: flex; align-items: center; gap: 6px; }
+.ad-cal svg { width: 16px; height: 16px; }
+.ad-cal__ok { color: #1f7a3a; font-weight: 600; }
+.ad-cal__err { color: #b3261e; font-weight: 600; line-height: 1.5; }

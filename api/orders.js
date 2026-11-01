@@ -14,7 +14,7 @@ async function addToCalendar(order, req) {
   try {
     order.calendarEventId = await Promise.race([
       calendar.addOrder(order, host ? `https://${host}` : ""),
-      new Promise((resolve) => setTimeout(() => resolve(null), 4000))
+      new Promise((resolve) => setTimeout(() => resolve(null), 7000))
     ]);
   } catch (e) {
     console.error(e);

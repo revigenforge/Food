@@ -8,13 +8,26 @@ const TZ = "Asia/Kolkata";
 const SLOT_MINUTES = 30;
 let cachedToken = null;
 
-function account() {
-  try {
-    const sa = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || "");
-    return sa.client_email && sa.private_key && process.env.GOOGLE_CALENDAR_ID ? sa : null;
-  } catch (e) {
-    return null;
+const calendarId = () => String(process.env.GOOGLE_CALENDAR_ID || "").trim();
+
+// Reads the key file pasted into Vercel. Copying it from a phone can add line breaks or quotes,
+// so those are cleaned up before giving up.
+function parseKey() {
+  let raw = String(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || "").trim().replace(/^\uFEFF/, "");
+  if (!raw) return { problem: "GOOGLE_SERVICE_ACCOUNT_JSON is missing in Vercel." };
+  if (/^['"`]/.test(raw) && raw.slice(-1) === raw[0]) raw = raw.slice(1, -1);
+  let sa = null;
+  for (const text of [raw, raw.replace(/[\r\n]+/g, "")]) {
+    try { sa = JSON.parse(text); break; } catch (e) { /* try the next clean-up */ }
   }
+  if (!sa || typeof sa !== "object") return { problem: "GOOGLE_SERVICE_ACCOUNT_JSON isn't a complete key file. Paste the whole file again, from the first { to the last }." };
+  if (!sa.client_email || !sa.private_key) return { problem: "GOOGLE_SERVICE_ACCOUNT_JSON is missing client_email or private_key. Paste the whole key file again." };
+  sa.private_key = String(sa.private_key).replace(/\\n/g, "\n");
+  return { sa };
+}
+function account() {
+  const { sa } = parseKey();
+  return sa && calendarId() ? sa : null;
 }
 const configured = () => !!account();
 
@@ -78,7 +91,7 @@ function eventFor(order, siteUrl) {
 async function api(method, path, body) {
   const sa = account();
   const token = await accessToken(sa);
-  const cal = encodeURIComponent(process.env.GOOGLE_CALENDAR_ID);
+  const cal = encodeURIComponent(calendarId());
   const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${cal}/events${path}`, {
     method,
     headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) },
@@ -100,4 +113,36 @@ async function removeEvent(eventId) {
   await api("DELETE", `/${encodeURIComponent(eventId)}`);
 }
 
-module.exports = { configured, addOrder, removeEvent, eventFor };
+// Dashboard "Test Google Calendar": adds a test event and explains what's wrong if it can't.
+async function test() {
+  const { sa, problem } = parseKey();
+  if (problem) return { ok: false, problem };
+  if (!calendarId()) return { ok: false, problem: "GOOGLE_CALENDAR_ID is missing in Vercel. Set it to the Gmail address of the calendar." };
+  const who = `${sa.client_email} → ${calendarId()}`;
+  cachedToken = null;
+  try {
+    await accessToken(sa);
+  } catch (e) {
+    return { ok: false, who, problem: `Google rejected the key (${e.message}). The key may have been deleted in Google Cloud: create a new JSON key and paste it into Vercel.` };
+  }
+  const start = new Date(Date.now() + 60 * 60 * 1000);
+  const end = new Date(start.getTime() + 15 * 60 * 1000);
+  try {
+    const ev = await api("POST", "", {
+      summary: "✅ Sweetly Yours: calendar connected (test, you can delete this)",
+      description: "Added by the website's Test Google Calendar button. New orders will appear like this at their slot.",
+      start: { dateTime: start.toISOString(), timeZone: TZ },
+      end: { dateTime: end.toISOString(), timeZone: TZ }
+    });
+    return { ok: true, who, eventId: ev && ev.id, at: start.toISOString() };
+  } catch (e) {
+    const m = e.message;
+    let problem = m;
+    if (/has not been used|is disabled|accessNotConfigured|SERVICE_DISABLED/i.test(m)) problem = "The Google Calendar API is turned off. In Google Cloud (project sweetly-yours) open APIs & Services → Library → Google Calendar API → Enable, wait a minute and test again.";
+    else if (/not found/i.test(m)) problem = `Google can't find the calendar "${calendarId()}" for ${sa.client_email}. Share that calendar with ${sa.client_email} ("Make changes to events"), and check GOOGLE_CALENDAR_ID is exactly that Gmail address.`;
+    else if (/writer access|forbidden|insufficient|requiredAccessLevel/i.test(m)) problem = `The calendar is shared, but read-only. In Google Calendar settings change ${sa.client_email} to "Make changes to events".`;
+    return { ok: false, who, problem: `${problem} (Google said: ${m})` };
+  }
+}
+
+module.exports = { configured, addOrder, removeEvent, eventFor, test };

@@ -1,5 +1,6 @@
 // Owner dashboard API (password in the ADMIN_PASSWORD environment variable).
 // GET  /api/admin  → latest orders
+// GET  /api/admin?calendarTest=1 → add a test event to Google Calendar, or explain what's wrong
 // POST /api/admin  → { id, status?, paymentStatus?, ownerNote?, finalTotal? } update an order
 const { STATUSES, HttpError, getOrder, saveOrder, listOrders, allow, isAdmin, send, handle } = require("./_lib/store");
 const calendar = require("./_lib/calendar");
@@ -33,6 +34,7 @@ module.exports = (req, res) => handle(res, async () => {
     if (!(await allow(`login:${ip}`, 20, 900))) throw new HttpError(429, "Too many attempts. Try again in 15 minutes.");
     throw new HttpError(401, process.env.ADMIN_PASSWORD ? "Wrong password." : "Set ADMIN_PASSWORD in Vercel first.");
   }
+  if (req.method === "GET" && req.query && req.query.calendarTest) return send(res, 200, await calendar.test());
   if (req.method === "GET") return send(res, 200, { orders: await listOrders(), calendarSync: calendar.configured() });
   if (req.method === "POST") {
     const b = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
