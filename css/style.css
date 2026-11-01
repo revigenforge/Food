@@ -995,3 +995,8 @@ body[data-page="admin"] main { padding-top: 6px; max-width: 760px; }
 .ad-cal svg { width: 16px; height: 16px; }
 .ad-cal__ok { color: #1f7a3a; font-weight: 600; }
 .ad-cal__err { color: #b3261e; font-weight: 600; line-height: 1.5; }
+.ad-cal__up { width: 100%; }
+.ad-cal__up summary { cursor: pointer; font-weight: 600; color: var(--rose-dark); }
+.ad-cal__up .field { display: grid; gap: 4px; margin: 10px 0; }
+.ad-cal__up .field span { font-size: 13px; color: var(--muted); }
+.ad-cal__pick { width: 100%; cursor: pointer; }

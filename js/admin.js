@@ -339,7 +339,8 @@
 
   function render() {
     $$("[data-admin-refresh], [data-admin-logout]").forEach((b) => b.classList.remove("hidden"));
-    const open = new Set($$("details[open]", root()).map((d) => d.closest("[data-id]").dataset.id + d.className));
+    const key = (d) => (d.closest("[data-id]") ? d.closest("[data-id]").dataset.id : "") + d.className;
+    const open = new Set($$("details[open]", root()).map(key));
     const counts = Object.fromEntries(FILTERS.map(([k, , fn]) => [k, orders.filter(fn).length]));
     const list = orders.filter(FILTERS.find((f) => f[0] === filter)[2]);
     root().innerHTML = `
@@ -354,9 +355,15 @@
         <p>${icon("clock")} Google Calendar sync: <b>${calendarOn ? "set up" : "not set up"}</b></p>
         <button type="button" class="chip-btn" data-cal-test>Test Google Calendar</button>
         <div data-cal-result>${calendarResult}</div>
+        <details class="ad-cal__up"${calendarOn ? "" : " open"}>
+          <summary>Upload key file</summary>
+          <label class="field"><span>Calendar Gmail (leave empty to use the one in Vercel)</span><input type="email" data-cal-id placeholder="e.g. sweetlyyoursbyzeen@gmail.com" autocomplete="off"></label>
+          <label class="btn btn--light ad-cal__pick">${icon("download")} Choose the key file<input type="file" accept=".json,.txt,application/json,text/plain" data-cal-file hidden></label>
+          <p class="fine">The .json (or renamed .txt) file you downloaded from Google Cloud. It's checked, saved securely and tested straight away.</p>
+        </details>
       </section>`;
     $$("details", root()).forEach((d) => {
-      if (open.has(d.closest("[data-id]").dataset.id + d.className)) d.open = true;
+      if (open.has(key(d))) d.open = true;
     });
   }
 
@@ -400,7 +407,27 @@
       update(id, { finalTotal: final === "" ? null : +final, ownerNote: $("[data-note]", card).value }, "Saved");
     }
   });
+  async function uploadKey(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    calendarResult = `<p>Uploading and testing…</p>`;
+    const id = ($("[data-cal-id]") || {}).value || "";
+    render();
+    let r;
+    try {
+      if (file.size > 20000) throw new Error("That file is too big to be a key file.");
+      r = await api("POST", { action: "calendarKey", key: await file.text(), calendarId: id.trim() });
+    } catch (e) { r = { ok: false, problem: e.message }; }
+    calendarResult = r.ok
+      ? `<p class="ad-cal__ok">✅ Key saved and working! A test event was added to the calendar for ${esc(fmtTime(Date.parse(r.at)))} today. New orders will appear at their slot.</p>`
+      : `<p class="ad-cal__err">❌ ${esc(r.problem || "Unknown problem")}</p>`;
+    if (r.who) calendarResult += `<p class="fine">${esc(r.who)}</p>`;
+    if (r.ok) calendarOn = true;
+    render();
+  }
+
   document.addEventListener("change", (e) => {
+    if (e.target.closest("[data-cal-file]")) { uploadKey(e.target); return; }
     const sel = e.target.closest("[data-set-status]");
     if (!sel) return;
     const id = sel.closest("[data-id]").dataset.id;

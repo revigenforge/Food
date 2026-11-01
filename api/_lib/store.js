@@ -80,4 +80,4 @@ async function handle(res, fn) {
   }
 }
 
-module.exports = { STATUSES, HttpError, newId, getOrder, saveOrder, listOrders, allow, isAdmin, send, handle };
+module.exports = { STATUSES, HttpError, redis, newId, getOrder, saveOrder, listOrders, allow, isAdmin, send, handle };

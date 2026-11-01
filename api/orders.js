@@ -9,7 +9,7 @@ const notify = require("./_lib/notify");
 // New orders go straight into Zeen's Google Calendar (when configured). A slow or failing
 // calendar never holds up the customer's order.
 async function addToCalendar(order, req) {
-  if (!calendar.configured()) return;
+  if (!(await calendar.configured())) return;
   const host = req.headers["x-forwarded-host"] || req.headers.host;
   try {
     order.calendarEventId = await Promise.race([
