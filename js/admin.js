@@ -28,7 +28,6 @@
   let knownNew = null;
   let timer = null;
   let seen = null; // last snapshot, to spot new orders and payments between refreshes
-  let calendarOn = false, calendarResult = ""; // Google Calendar sync status + last test result
   const POLL_MS = 20000; // also refreshes straight away whenever the dashboard comes back on screen
   const root = () => $("#admin");
 
@@ -134,7 +133,6 @@
       if (fromLogin) store.set("admin_pw", password);
       const changed = JSON.stringify(data.orders || []) !== JSON.stringify(orders);
       orders = data.orders || [];
-      calendarOn = !!data.calendarSync;
       announce(orders);
       const newCount = orders.filter((o) => o.status === "placed").length;
       if (knownNew !== null && newCount > knownNew) toast(`${newCount - knownNew} new order${newCount - knownNew > 1 ? "s" : ""}!`);
@@ -350,39 +348,14 @@
       </nav>
       <div class="ad-list">
         ${list.map(cardHtml).join("") || `<p class="empty">No ${filter === "all" ? "" : FILTERS.find((f) => f[0] === filter)[1].toLowerCase() + " "}orders yet.</p>`}
-      </div>
-      <section class="ad-cal">
-        <p>${icon("clock")} Google Calendar sync: <b>${calendarOn ? "set up" : "not set up"}</b></p>
-        <button type="button" class="chip-btn" data-cal-test>Test Google Calendar</button>
-        <div data-cal-result>${calendarResult}</div>
-        <details class="ad-cal__up"${calendarOn ? "" : " open"}>
-          <summary>Upload key file</summary>
-          <label class="field"><span>Calendar Gmail (leave empty to use the one in Vercel)</span><input type="email" data-cal-id placeholder="e.g. sweetlyyoursbyzeen@gmail.com" autocomplete="off"></label>
-          <label class="btn btn--light ad-cal__pick">${icon("download")} Choose the key file<input type="file" accept=".json,.txt,application/json,text/plain" data-cal-file hidden></label>
-          <p class="fine">The .json (or renamed .txt) file you downloaded from Google Cloud. It's checked, saved securely and tested straight away.</p>
-        </details>
-      </section>`;
+      </div>`;
     $$("details", root()).forEach((d) => {
       if (open.has(key(d))) d.open = true;
     });
   }
 
   /* ---------- Events ---------- */
-  async function testCalendar(btn) {
-    btn.disabled = true;
-    btn.textContent = "Testing…";
-    let r;
-    try { r = await api("GET", null, "?calendarTest=1"); } catch (e) { r = { ok: false, problem: e.message }; }
-    calendarResult = r.ok
-      ? `<p class="ad-cal__ok">✅ Working! A test event was added to the calendar for ${esc(fmtTime(Date.parse(r.at)))} today. New orders will appear at their slot.</p>`
-      : `<p class="ad-cal__err">❌ ${esc(r.problem || "Unknown problem")}</p>`;
-    if (r.who) calendarResult += `<p class="fine">${esc(r.who)}</p>`;
-    render();
-  }
-
   document.addEventListener("click", (e) => {
-    const ct = e.target.closest("[data-cal-test]");
-    if (ct) { testCalendar(ct); return; }
     if (e.target.closest("[data-alert-bar]")) { unlockAlerts(true); toast("Alerts are on. Keep this page open."); return; }
     if (!audio || audio.state !== "running") unlockAlerts(); // any tap enables sound
     const f = e.target.closest("[data-filter]");
@@ -407,27 +380,7 @@
       update(id, { finalTotal: final === "" ? null : +final, ownerNote: $("[data-note]", card).value }, "Saved");
     }
   });
-  async function uploadKey(input) {
-    const file = input.files && input.files[0];
-    if (!file) return;
-    calendarResult = `<p>Uploading and testing…</p>`;
-    const id = ($("[data-cal-id]") || {}).value || "";
-    render();
-    let r;
-    try {
-      if (file.size > 20000) throw new Error("That file is too big to be a key file.");
-      r = await api("POST", { action: "calendarKey", key: await file.text(), calendarId: id.trim() });
-    } catch (e) { r = { ok: false, problem: e.message }; }
-    calendarResult = r.ok
-      ? `<p class="ad-cal__ok">✅ Key saved and working! A test event was added to the calendar for ${esc(fmtTime(Date.parse(r.at)))} today. New orders will appear at their slot.</p>`
-      : `<p class="ad-cal__err">❌ ${esc(r.problem || "Unknown problem")}</p>`;
-    if (r.who) calendarResult += `<p class="fine">${esc(r.who)}</p>`;
-    if (r.ok) calendarOn = true;
-    render();
-  }
-
   document.addEventListener("change", (e) => {
-    if (e.target.closest("[data-cal-file]")) { uploadKey(e.target); return; }
     const sel = e.target.closest("[data-set-status]");
     if (!sel) return;
     const id = sel.closest("[data-id]").dataset.id;

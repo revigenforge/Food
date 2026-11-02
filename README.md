@@ -100,8 +100,8 @@ For fully automatic syncing (every new order appears in the calendar at its slot
 2. **IAM & Admin → Service Accounts** → create one → **Keys → Add key → JSON** (a file downloads).
 3. In Google Calendar → **Settings → (Zeen's calendar) → Share with specific people** → add the service account's email with **Make changes to events**.
 4. Same settings page → **Event notifications** → set **30 minutes before** (this is the alert for website orders).
-5. Either upload the key file on the dashboard (bottom of the page → **Upload key file**, with the calendar's Gmail address), or in Vercel → Environment Variables set `GOOGLE_SERVICE_ACCOUNT_JSON` = the whole contents of the JSON file and `GOOGLE_CALENDAR_ID` = Zeen's Gmail address, then redeploy.
-6. Tap **Test Google Calendar** on the dashboard: it adds a test event, or says exactly what's wrong.
+5. In Vercel → Environment Variables: `GOOGLE_SERVICE_ACCOUNT_JSON` = the whole contents of the JSON file, `GOOGLE_CALENDAR_ID` = Zeen's Gmail address. Redeploy.
+   (The live site's key was uploaded once through the admin API, `POST /api/admin {action: "calendarKey"}`, and is kept in the order database; it's used when the Vercel variables are missing or damaged. `GET /api/admin?calendarTest=1` adds a test event or explains what's wrong.)
 
 Without these, or on a static-only host like GitHub Pages, checkout falls back to plain ordering by DM (no tracking link).
 
