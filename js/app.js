@@ -645,10 +645,12 @@
   const toHHMM = (min) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
   const clock = (min) => { const h = Math.floor(min / 60), m = min % 60; return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")}`; };
   const slotMinutes = () => (S.slots && S.slots.minutes) || 30;
-  function allSlots() {
+  // Slots for a date: the usual hours, or that day's own hours from S.specialDays.
+  function allSlots(date = details.date) {
     if (!S.slots) return [];
+    const day = (S.specialDays && S.specialDays[date]) || S.slots;
     const out = [];
-    for (let t = toMin(S.slots.start); t + slotMinutes() <= toMin(S.slots.end); t += slotMinutes()) out.push(toHHMM(t));
+    for (let t = toMin(day.start); t + slotMinutes() <= toMin(day.end); t += slotMinutes()) out.push(toHHMM(t));
     return out;
   }
   function slotLabel(hhmm) {
@@ -666,7 +668,7 @@
     const date = details.date;
     if (!date) return `<p class="fine">Choose a date to see the available slots.</p>`;
     if (date < minDate()) return `<p class="fine">${slowItems().length ? `${esc(slowItems().map((i) => i.name).join(" and "))} need${slowItems().length > 1 ? "" : "s"} a day to prepare. ` : ""}Please choose a date from ${fmtDate(minDate())}.</p>`;
-    const list = allSlots();
+    const list = allSlots(date);
     const open = list.filter((t) => slotOpen(date, t));
     if (!open.length) return `<p class="fine">No slots left for this date. Please choose another day.</p>`;
     return `<div class="slots">${list.map((t) => {
