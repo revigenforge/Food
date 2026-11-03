@@ -32,9 +32,10 @@ window.SITE = {
 
   // Pick-up / delivery time slots offered at checkout.
   slots: { start: "18:00", end: "21:00", minutes: 30 },
-  // One-off hours for a particular date ("YYYY-MM-DD"); other dates keep the usual slots.
+  // One-off hours for a particular date ("YYYY-MM-DD"), e.g. { start: "16:00", end: "17:00" },
+  // or { closed: true } for no orders that day. Other dates keep the usual slots.
   specialDays: {
-    "2026-11-03": { start: "16:00", end: "17:00" } // Tue 3 Nov: only 4–5 PM
+    "2026-11-03": { closed: true } // Tue 3 Nov: closed, orders from tomorrow
   },
 
   /*

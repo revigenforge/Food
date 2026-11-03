@@ -637,6 +637,8 @@
   function minDate() {
     const d = new Date();
     d.setDate(d.getDate() + Math.max(S.leadDays || 0, ...slowItems().map((i) => i.prepDays)));
+    // Skip days marked closed in S.specialDays.
+    for (let i = 0; i < 14 && S.specialDays && (S.specialDays[localDate(d)] || {}).closed; i++) d.setDate(d.getDate() + 1);
     return localDate(d);
   }
 
@@ -649,6 +651,7 @@
   function allSlots(date = details.date) {
     if (!S.slots) return [];
     const day = (S.specialDays && S.specialDays[date]) || S.slots;
+    if (day.closed) return [];
     const out = [];
     for (let t = toMin(day.start); t + slotMinutes() <= toMin(day.end); t += slotMinutes()) out.push(toHHMM(t));
     return out;
