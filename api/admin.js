@@ -2,7 +2,7 @@
 // GET  /api/admin  → latest orders
 // GET  /api/admin?calendarTest=1 → add a test event to Google Calendar, or explain what's wrong
 // POST /api/admin { action: "calendarKey", key, calendarId } → save an uploaded key file, then test it
-// POST /api/admin  → { id, status?, paymentStatus?, ownerNote?, finalTotal? } update an order
+// POST /api/admin  → { id, status?, paymentStatus? (unpaid/submitted/paid/refunded), ownerNote?, finalTotal? } update an order
 const { STATUSES, HttpError, getOrder, saveOrder, listOrders, allow, isAdmin, send, handle } = require("./_lib/store");
 const calendar = require("./_lib/calendar");
 
@@ -51,9 +51,9 @@ module.exports = (req, res) => handle(res, async () => {
       order.status = b.status;
       order.history.push({ status: b.status, at: now });
     }
-    if (["unpaid", "submitted", "paid"].includes(b.paymentStatus)) {
+    if (["unpaid", "submitted", "paid", "refunded"].includes(b.paymentStatus)) {
       const payment = order.payment || { status: "unpaid", ref: "" };
-      order.payment = { ...payment, status: b.paymentStatus, ...(b.paymentStatus === "paid" ? { paidAt: now } : {}) };
+      order.payment = { ...payment, status: b.paymentStatus, ...(b.paymentStatus === "paid" ? { paidAt: now } : {}), ...(b.paymentStatus === "refunded" ? { refundedAt: now } : {}) };
     }
     if (typeof b.ownerNote === "string") order.ownerNote = b.ownerNote.trim().slice(0, 500);
     if (b.finalTotal !== undefined) order.finalTotal = b.finalTotal === null || b.finalTotal === "" ? null : Math.max(0, Math.round(+b.finalTotal) || 0);

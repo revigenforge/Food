@@ -863,6 +863,7 @@ body[data-page="admin"] main { padding-top: 6px; max-width: 760px; }
 .status-pill--pay-unpaid { background: #f6efed; color: #8a6f66; }
 .status-pill--pay-submitted { background: #fbf0d6; color: #8a6514; }
 .status-pill--pay-paid { background: #e7f4ea; color: var(--green); }
+.status-pill--pay-refunded { background: #e8eef8; color: #2f5d9b; }
 .chip-btn { white-space: nowrap; flex: none; }
 
 /* ---------- Prep info, slots, add-ons, store address ---------- */

@@ -1609,7 +1609,9 @@
     const amt = amountDue(o);
     const partial = (P.advancePercent || 100) < 100;
     const label = partial ? `${rupee(amt)} advance <small>(${P.advancePercent}% of ${rupee(orderTotal(o))})</small>` : rupee(amt);
-    if (o.status === "cancelled") return "";
+    if (o.status === "cancelled") {
+      return pay.status === "refunded" ? `<section class="pay pay--paid"><div class="pay__head">${icon("check")}<div><h2>Refunded</h2><p>${label} has been refunded to you.</p></div></div></section>` : "";
+    }
     if (pay.status === "paid") {
       return `<section class="pay pay--paid"><div class="pay__head">${icon("check")}<div><h2>Paid</h2><p>${label} received. Thank you!</p></div></div></section>`;
     }

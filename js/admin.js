@@ -5,7 +5,7 @@
   const S = window.SITE;
   const { $, $$, icon, esc, rupee, toast, store, statusInfo, orderDetailsHtml, fmtTime, fmtDate, orderTotal, trackUrl, amountDue, paymentOf, canPay, upiActive, slotLabel, slotMinutes } = window.SY;
   const P = S.payment || {};
-  const PAY_LABEL = { unpaid: "Unpaid", submitted: "Payment to verify", paid: "Paid" };
+  const PAY_LABEL = { unpaid: "Unpaid", submitted: "Payment to verify", paid: "Paid", refunded: "Refunded" };
 
   const NEXT = {
     placed: ["confirmed", "Confirm order"],
@@ -16,7 +16,7 @@
   const FILTERS = [
     ["active", "Active", (o) => !["completed", "cancelled"].includes(o.status)],
     ["placed", "New", (o) => o.status === "placed"],
-    ["verify", "To verify", (o) => paymentOf(o).status === "submitted"],
+    ["verify", "To verify", (o) => paymentOf(o).status === "submitted" && o.status !== "cancelled"],
     ["all", "All", () => true],
     ["completed", "Done", (o) => o.status === "completed"],
     ["cancelled", "Cancelled", (o) => o.status === "cancelled"]
@@ -210,7 +210,7 @@
       case "completed":
         return `Thank you for ordering from ${S.name}, ${first}! We hope you loved every bite 💗\nTag us @${S.instagram} so we can see it!`;
       case "cancelled":
-        return `Hi ${first}, your ${S.name} order ${o.id} has been cancelled.${note}${paymentOf(o).status !== "unpaid" ? `\nYour payment of ${rupee(amountDue(o))} will be refunded to you.` : ""}\n\nMessage us if you have any questions.`;
+        return `Hi ${first}, your ${S.name} order ${o.id} has been cancelled.${note}${paymentOf(o).status === "refunded" ? `\nYour payment of ${rupee(amountDue(o))} has been refunded to you.` : paymentOf(o).status !== "unpaid" ? `\nYour payment of ${rupee(amountDue(o))} will be refunded to you.` : ""}\n\nMessage us if you have any questions.`;
       default:
         return `Hi ${first}! Here's your ${S.name} order: ${link}`;
     }
@@ -246,14 +246,18 @@
     const due = rupee(amountDue(o));
     return `
       <div class="ad-pay ad-pay--${pay.status}">
-        <span class="status-pill status-pill--pay-${payingNow(o) ? "paying" : pay.status}">${icon(pay.status === "paid" ? "check" : "upi")}${payingNow(o) ? "Paying now…" : PAY_LABEL[pay.status] || pay.status}</span>
+        <span class="status-pill status-pill--pay-${payingNow(o) ? "paying" : pay.status}">${icon(pay.status === "paid" || pay.status === "refunded" ? "check" : "upi")}${payingNow(o) ? "Paying now…" : PAY_LABEL[pay.status] || pay.status}</span>
         <span class="ad-pay__info">${due}${pay.ref ? ` · Ref <b>${esc(pay.ref)}</b>` : ""}</span>
-        ${pay.status === "paid"
-          ? `<button class="link" type="button" data-pay="unpaid">Undo</button>`
-          : `<button class="chip-btn" type="button" data-pay="paid">${icon("check")} Mark as paid</button>`}
+        ${pay.status === "refunded"
+          ? `<button class="link" type="button" data-pay="paid">Undo</button>`
+          : o.status === "cancelled"
+            ? `<button class="chip-btn" type="button" data-pay="refunded">${icon("check")} Mark as refunded</button>`
+            : pay.status === "paid"
+              ? `<button class="link" type="button" data-pay="unpaid">Undo</button>`
+              : `<button class="chip-btn" type="button" data-pay="paid">${icon("check")} Mark as paid</button>`}
       </div>
       ${needsCharge(o) ? `<p class="fine ad-pay__hint">Delivery charge to be confirmed: set the final total below (items + delivery) so the customer can pay.</p>` : ""}
-      ${o.status === "cancelled" && pay.status !== "unpaid" ? `<p class="fine ad-pay__hint">Cancelled after paying: refund ${due} to the customer${pay.ref ? ` (ref ${esc(pay.ref)})` : ""}.</p>` : ""}
+      ${o.status === "cancelled" && (pay.status === "submitted" || pay.status === "paid") ? `<p class="fine ad-pay__hint">Cancelled after paying: refund ${due} to the customer${pay.ref ? ` (ref ${esc(pay.ref)})` : ""}, then tap “Mark as refunded”.</p>` : ""}
       ${pay.status === "submitted" && o.status !== "cancelled" ? `<p class="fine ad-pay__hint">Check your UPI / bank app for ${due} with ref ${esc(pay.ref)}, then tap “Mark as paid”.</p>` : ""}`;
   }
 
@@ -372,7 +376,8 @@
     if (e.target.closest("[data-copy]")) { copy(updateMessage(o)); return; }
     const pay = e.target.closest("[data-pay]");
     if (pay) {
-      update(id, { paymentStatus: pay.dataset.pay }, pay.dataset.pay === "paid" ? "Marked as paid. Send the customer a thank-you below" : "Payment marked unpaid");
+      const msg = { paid: "Marked as paid. Send the customer a thank-you below", refunded: "Marked as refunded. Let the customer know below", unpaid: "Payment marked unpaid" };
+      update(id, { paymentStatus: pay.dataset.pay }, o.status === "cancelled" && pay.dataset.pay === "paid" ? "Refund undone" : msg[pay.dataset.pay]);
       return;
     }
     if (e.target.closest("[data-save]")) {
