@@ -20,7 +20,7 @@ window.SITE = {
   email: "",
 
   cities: ["Chennai", "Bengaluru"],
-  hours: "6 PM – 9 PM",
+  hours: "6 PM – 9 PM · Chennai: Wed – Sun · Bengaluru: Wed – Sat",
   leadDays: 0, // 0 = same-day orders allowed (slots within the prep time are hidden)
 
   // Shown in every product's details.
@@ -32,6 +32,11 @@ window.SITE = {
 
   // Pick-up / delivery time slots offered at checkout.
   slots: { start: "18:00", end: "21:00", minutes: 30 },
+  // Weekly closed days per city (0 = Sunday, 1 = Monday, … 6 = Saturday): no bookings on these days.
+  closedDays: {
+    Chennai: [1, 2], // Monday, Tuesday
+    Bengaluru: [0, 1, 2] // Sunday, Monday, Tuesday
+  },
   // One-off hours for a particular date ("YYYY-MM-DD"), e.g. { start: "16:00", end: "17:00" },
   // or { closed: true } for no orders that day. Other dates keep the usual slots.
   specialDays: {

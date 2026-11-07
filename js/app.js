@@ -634,11 +634,22 @@
   const localDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   // Items that need a day or more (item.prepDays) push the earliest date for the whole order.
   const slowItems = () => [...new Set(state.cart.map((l) => findItem(l.id)).filter((i) => i && i.prepDays))];
+  // Closed: the city's weekly closed days (S.closedDays) or a date marked closed in S.specialDays.
+  // A special day with its own hours opens a normally closed weekday.
+  function closedOn(date, city = state.city) {
+    const special = S.specialDays && S.specialDays[date];
+    if (special) return !!special.closed;
+    return ((S.closedDays || {})[city] || []).includes(new Date(date + "T00:00").getDay());
+  }
+  const DAY_NAMES = ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"];
+  const closedDaysText = (city = state.city) => {
+    const names = ((S.closedDays || {})[city] || []).map((n) => DAY_NAMES[n]);
+    return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0] || "";
+  };
   function minDate() {
     const d = new Date();
     d.setDate(d.getDate() + Math.max(S.leadDays || 0, ...slowItems().map((i) => i.prepDays)));
-    // Skip days marked closed in S.specialDays.
-    for (let i = 0; i < 14 && S.specialDays && (S.specialDays[localDate(d)] || {}).closed; i++) d.setDate(d.getDate() + 1);
+    for (let i = 0; i < 14 && closedOn(localDate(d)); i++) d.setDate(d.getDate() + 1);
     return localDate(d);
   }
 
@@ -650,8 +661,8 @@
   // Slots for a date: the usual hours, or that day's own hours from S.specialDays.
   function allSlots(date = details.date) {
     if (!S.slots) return [];
+    if (closedOn(date)) return [];
     const day = (S.specialDays && S.specialDays[date]) || S.slots;
-    if (day.closed) return [];
     const out = [];
     for (let t = toMin(day.start); t + slotMinutes() <= toMin(day.end); t += slotMinutes()) out.push(toHHMM(t));
     return out;
@@ -670,6 +681,7 @@
   function slotsHtml() {
     const date = details.date;
     if (!date) return `<p class="fine">Choose a date to see the available slots.</p>`;
+    if (closedOn(date)) return `<p class="fine">${closedDaysText() && !(S.specialDays || {})[date] ? `Our ${esc(state.city)} kitchen is closed on ${closedDaysText()}.` : "We're closed on this day."} Please choose another day.</p>`;
     if (date < minDate()) return `<p class="fine">${slowItems().length ? `${esc(slowItems().map((i) => i.name).join(" and "))} need${slowItems().length > 1 ? "" : "s"} a day to prepare. ` : ""}Please choose a date from ${fmtDate(minDate())}.</p>`;
     const list = allSlots(date);
     const open = list.filter((t) => slotOpen(date, t));
@@ -1415,6 +1427,7 @@
       return;
     }
     if (!details.date) missing.push("date");
+    else if (closedOn(details.date)) missing.push(`another date (${closedDaysText() && !(S.specialDays || {})[details.date] ? `our ${state.city} kitchen is closed on ${closedDaysText()}` : "we're closed on this day"})`);
     else if (details.date < minDate()) {
       const slow = slowItems();
       missing.push(`a date from ${fmtDate(minDate())}${slow.length ? ` (${slow.map((i) => i.name).join(" and ")} ${slow.length > 1 ? "need" : "needs"} a day to prepare)` : ""}`);
