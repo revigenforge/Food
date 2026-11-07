@@ -639,13 +639,10 @@
   function closedOn(date, city = state.city) {
     const special = S.specialDays && S.specialDays[date];
     if (special) return !!special.closed;
-    return ((S.closedDays || {})[city] || []).includes(new Date(date + "T00:00").getDay());
+    const weekly = S.closedDays || {};
+    if (weekly.until && date > weekly.until) return false;
+    return (weekly[city] || []).includes(new Date(date + "T00:00").getDay());
   }
-  const DAY_NAMES = ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"];
-  const closedDaysText = (city = state.city) => {
-    const names = ((S.closedDays || {})[city] || []).map((n) => DAY_NAMES[n]);
-    return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0] || "";
-  };
   function minDate() {
     const d = new Date();
     d.setDate(d.getDate() + Math.max(S.leadDays || 0, ...slowItems().map((i) => i.prepDays)));
@@ -681,7 +678,7 @@
   function slotsHtml() {
     const date = details.date;
     if (!date) return `<p class="fine">Choose a date to see the available slots.</p>`;
-    if (closedOn(date)) return `<p class="fine">${closedDaysText() && !(S.specialDays || {})[date] ? `Our ${esc(state.city)} kitchen is closed on ${closedDaysText()}.` : "We're closed on this day."} Please choose another day.</p>`;
+    if (closedOn(date)) return `<p class="fine">Our ${esc(state.city)} kitchen is closed on ${fmtDate(date)}. Please choose another day.</p>`;
     if (date < minDate()) return `<p class="fine">${slowItems().length ? `${esc(slowItems().map((i) => i.name).join(" and "))} need${slowItems().length > 1 ? "" : "s"} a day to prepare. ` : ""}Please choose a date from ${fmtDate(minDate())}.</p>`;
     const list = allSlots(date);
     const open = list.filter((t) => slotOpen(date, t));
@@ -1427,7 +1424,7 @@
       return;
     }
     if (!details.date) missing.push("date");
-    else if (closedOn(details.date)) missing.push(`another date (${closedDaysText() && !(S.specialDays || {})[details.date] ? `our ${state.city} kitchen is closed on ${closedDaysText()}` : "we're closed on this day"})`);
+    else if (closedOn(details.date)) missing.push(`another date (our ${state.city} kitchen is closed on ${fmtDate(details.date)})`);
     else if (details.date < minDate()) {
       const slow = slowItems();
       missing.push(`a date from ${fmtDate(minDate())}${slow.length ? ` (${slow.map((i) => i.name).join(" and ")} ${slow.length > 1 ? "need" : "needs"} a day to prepare)` : ""}`);
