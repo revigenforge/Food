@@ -547,6 +547,7 @@
     const info = S.orderInfo ? `
       <div class="prep-info">
         <div><span>${icon("clock")} Prep time <b>${item.prepDays ? `${item.prepDays} day${item.prepDays > 1 ? "s" : ""}` : `${S.orderInfo.prepHours} hrs`}</b></span><span>${icon("truck")} First dispatch slot <b>${item.prepDays ? `${item.prepDays > 1 ? `In ${item.prepDays} days` : "Tomorrow"}, ${esc(S.orderInfo.firstDispatch)}` : esc(S.orderInfo.firstDispatch)}</b></span></div>
+        ${(item.unavailableOn || []).includes(localDate(new Date())) ? `<p class="prep-info__note">Not available today: order for tomorrow onwards.</p>` : ""}
         ${item.prepDays ? `<p class="prep-info__note">Made fresh to order: order today, ready from ${item.prepDays > 1 ? `${item.prepDays} days later` : "tomorrow"}.</p>` : ""}
         <p>${esc(S.orderInfo.urgent)}</p>
         <div class="prep-info__links">
@@ -634,6 +635,8 @@
   const localDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   // Items that need a day or more (item.prepDays) push the earliest date for the whole order.
   const slowItems = () => [...new Set(state.cart.map((l) => findItem(l.id)).filter((i) => i && i.prepDays))];
+  // Items in the cart that can't be made on a date (item.unavailableOn: ["YYYY-MM-DD", …]).
+  const unavailableItems = (date) => [...new Set(state.cart.map((l) => findItem(l.id)).filter((i) => i && (i.unavailableOn || []).includes(date)))];
   // Closed: the city's weekly closed days (S.closedDays) or a date marked closed in S.specialDays.
   // A special day with its own hours opens a normally closed weekday.
   function closedOn(date, city = state.city) {
@@ -646,7 +649,7 @@
   function minDate() {
     const d = new Date();
     d.setDate(d.getDate() + Math.max(S.leadDays || 0, ...slowItems().map((i) => i.prepDays)));
-    for (let i = 0; i < 14 && closedOn(localDate(d)); i++) d.setDate(d.getDate() + 1);
+    for (let i = 0; i < 14 && (closedOn(localDate(d)) || unavailableItems(localDate(d)).length); i++) d.setDate(d.getDate() + 1);
     return localDate(d);
   }
 
@@ -679,6 +682,7 @@
     const date = details.date;
     if (!date) return `<p class="fine">Choose a date to see the available slots.</p>`;
     if (closedOn(date)) return `<p class="fine">Our ${esc(state.city)} kitchen is closed on ${fmtDate(date)}. Please choose another day.</p>`;
+    if (unavailableItems(date).length) return `<p class="fine">${esc(unavailableItems(date).map((i) => i.name).join(" and "))} isn't available on ${fmtDate(date)}. Please choose another day.</p>`;
     if (date < minDate()) return `<p class="fine">${slowItems().length ? `${esc(slowItems().map((i) => i.name).join(" and "))} need${slowItems().length > 1 ? "" : "s"} a day to prepare. ` : ""}Please choose a date from ${fmtDate(minDate())}.</p>`;
     const list = allSlots(date);
     const open = list.filter((t) => slotOpen(date, t));
@@ -1425,6 +1429,7 @@
     }
     if (!details.date) missing.push("date");
     else if (closedOn(details.date)) missing.push(`another date (our ${state.city} kitchen is closed on ${fmtDate(details.date)})`);
+    else if (unavailableItems(details.date).length) missing.push(`another date (${unavailableItems(details.date).map((i) => i.name).join(" and ")} isn't available on ${fmtDate(details.date)})`);
     else if (details.date < minDate()) {
       const slow = slowItems();
       missing.push(`a date from ${fmtDate(minDate())}${slow.length ? ` (${slow.map((i) => i.name).join(" and ")} ${slow.length > 1 ? "need" : "needs"} a day to prepare)` : ""}`);

@@ -163,6 +163,7 @@ window.SITE = {
    *   tallPhotos: true shows the product popup's photos in portrait (4:5) instead of wide.
    *   diet:    "egg" (yellow egg mark) or "veg" (green eggless mark), shown next to the name.
    *   prepDays: 1 = needs a day to prepare: orders with it can't be for today.
+   *   unavailableOn: ["YYYY-MM-DD", …] dates it can't be ordered for (other items still can).
    *   cities:  where it's sold (default: all cities)
    *   badge:   "bestseller" | "new" | "gifting" | "signature" (optional)
    *   options: the first group sets the base price ("price" per choice, optional "note"
@@ -254,6 +255,7 @@ window.SITE = {
       category: "desserts",
       name: "Biscoff Banoffee",
       diet: "veg",
+      unavailableOn: ["2026-11-12"], // not available today (Thu 12 Nov): orders from tomorrow
       cities: ["Chennai"],
       images: ["assets/img/biscoff-banoffee-tin.jpg", "assets/img/biscoff-banoffee-jar.jpg"],
       tallPhotos: true,
