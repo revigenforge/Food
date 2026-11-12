@@ -547,7 +547,7 @@
     const info = S.orderInfo ? `
       <div class="prep-info">
         <div><span>${icon("clock")} Prep time <b>${item.prepDays ? `${item.prepDays} day${item.prepDays > 1 ? "s" : ""}` : `${S.orderInfo.prepHours} hrs`}</b></span><span>${icon("truck")} First dispatch slot <b>${item.prepDays ? `${item.prepDays > 1 ? `In ${item.prepDays} days` : "Tomorrow"}, ${esc(S.orderInfo.firstDispatch)}` : esc(S.orderInfo.firstDispatch)}</b></span></div>
-        ${(item.unavailableOn || []).includes(localDate(new Date())) ? `<p class="prep-info__note">Not available today: order for tomorrow onwards.</p>` : ""}
+        ${unavailableDates(item).includes(localDate(new Date())) ? `<p class="prep-info__note">Not available today: order for tomorrow onwards.</p>` : ""}
         ${item.prepDays ? `<p class="prep-info__note">Made fresh to order: order today, ready from ${item.prepDays > 1 ? `${item.prepDays} days later` : "tomorrow"}.</p>` : ""}
         <p>${esc(S.orderInfo.urgent)}</p>
         <div class="prep-info__links">
@@ -636,7 +636,9 @@
   // Items that need a day or more (item.prepDays) push the earliest date for the whole order.
   const slowItems = () => [...new Set(state.cart.map((l) => findItem(l.id)).filter((i) => i && i.prepDays))];
   // Items in the cart that can't be made on a date (item.unavailableOn: ["YYYY-MM-DD", …]).
-  const unavailableItems = (date) => [...new Set(state.cart.map((l) => findItem(l.id)).filter((i) => i && (i.unavailableOn || []).includes(date)))];
+  // unavailableOn is a list of dates (every city) or { City: [dates] } (that city only).
+  const unavailableDates = (item) => (Array.isArray(item.unavailableOn) ? item.unavailableOn : (item.unavailableOn || {})[state.city] || []);
+  const unavailableItems = (date) => [...new Set(state.cart.map((l) => findItem(l.id)).filter((i) => i && unavailableDates(i).includes(date)))];
   // Closed: the city's weekly closed days (S.closedDays) or a date marked closed in S.specialDays.
   // A special day with its own hours opens a normally closed weekday.
   function closedOn(date, city = state.city) {
