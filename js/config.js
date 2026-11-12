@@ -237,9 +237,9 @@ window.SITE = {
       ]
     },
     {
-      id: "brownie-pudding",
+      id: "lava-brownie-tin", // was "brownie-pudding": new id so old saved carts don't pick the wrong size
       category: "desserts",
-      name: "Ina Garten Brownie Pudding",
+      name: "Lava Brownie Tin",
       diet: "egg",
       prepDays: 1,
       cities: ["Chennai"],
@@ -248,7 +248,9 @@ window.SITE = {
         "A rich, fudgy chocolate brownie baked until the top is crackly and the centre stays soft, gooey and scoopable. Deeply chocolatey, best enjoyed warm, and even better with a scoop of ice cream.",
       options: [
         { name: "Size", choices: [
-          { label: "Family", price: 999 }
+          { label: "Couples", price: 600 },
+          { label: "Family", price: 1200 },
+          { label: "Celebration", price: 2400 }
         ] }
       ]
     },
