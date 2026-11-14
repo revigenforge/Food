@@ -163,6 +163,9 @@ window.SITE = {
    *   tallPhotos: true shows the product popup's photos in portrait (4:5) instead of wide.
    *   diet:    "egg" (yellow egg mark) or "veg" (green eggless mark), shown next to the name.
    *   prepDays: 1 = needs a day to prepare: orders with it can't be for today.
+   *   specialDates: { "YYYY-MM-DD": { start, end } } can be ordered on that date despite prepDays,
+   *            in those hours only.
+   *   noAddons: ["choco", …] add-ons not offered with this item.
    *   unavailableOn: ["YYYY-MM-DD", …] dates it can't be ordered for (other items still can),
    *            or { Chennai: [...] } for one city only.
    *   cities:  where it's sold (default: all cities)
@@ -242,6 +245,8 @@ window.SITE = {
       name: "Lava Brownie Tin",
       diet: "egg",
       prepDays: 1,
+      specialDates: { "2026-11-14": { start: "19:00", end: "20:00" } }, // Sat 14 Nov: available today, 7–8 PM slots
+      noAddons: ["choco"], // no Chocolate Message
       cities: ["Chennai"],
       images: ["assets/img/brownie-pudding.jpg", "assets/img/brownie-pudding-tin.jpg"],
       description:

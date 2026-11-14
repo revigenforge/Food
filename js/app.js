@@ -94,7 +94,7 @@
       const list = g.multi ? (Array.isArray(p) ? p : [p]) : [p];
       return list.length > 0 && list.every((ci) => Number.isInteger(ci) && ci >= 0 && ci < g.choices.length);
     });
-    const addonsOk = (l.addons || []).every((a) => (S.giftAddons || []).some((x) => x.id === a.id) && a.qty >= 1);
+    const addonsOk = (l.addons || []).every((a) => (S.giftAddons || []).some((x) => x.id === a.id && !(item.noAddons || []).includes(x.id)) && a.qty >= 1);
     return ok && addonsOk;
   }
   state.cart = (Array.isArray(state.cart) ? state.cart : []).filter((l) => l && validLine(l));
@@ -548,6 +548,7 @@
       <div class="prep-info">
         <div><span>${icon("clock")} Prep time <b>${item.prepDays ? `${item.prepDays} day${item.prepDays > 1 ? "s" : ""}` : `${S.orderInfo.prepHours} hrs`}</b></span><span>${icon("truck")} First dispatch slot <b>${item.prepDays ? `${item.prepDays > 1 ? `In ${item.prepDays} days` : "Tomorrow"}, ${esc(S.orderInfo.firstDispatch)}` : esc(S.orderInfo.firstDispatch)}</b></span></div>
         ${unavailableDates(item).includes(localDate(new Date())) ? `<p class="prep-info__note">Not available today: order for tomorrow onwards.</p>` : ""}
+        ${item.specialDates && item.specialDates[localDate(new Date())] ? `<p class="prep-info__note">Available today too, for the ${slotLabel(item.specialDates[localDate(new Date())].start).split(" – ")[0]} – ${slotLabel(toHHMM(toMin(item.specialDates[localDate(new Date())].end) - slotMinutes())).split(" – ")[1]} slots.</p>` : ""}
         ${item.prepDays ? `<p class="prep-info__note">Made fresh to order: order today, ready from ${item.prepDays > 1 ? `${item.prepDays} days later` : "tomorrow"}.</p>` : ""}
         <p>${esc(S.orderInfo.urgent)}</p>
         <div class="prep-info__links">
@@ -558,7 +559,7 @@
     const o = openSheet(item.name,
       `${galleryHtml(item, item.tallPhotos ? "product-hero product-hero--tall" : "product-hero")}
        ${DIET[item.diet] ? `<p class="product-diet">${dietMark(item)} ${DIET[item.diet]}</p>` : ""}
-       <p class="product-desc">${esc(item.description)}</p>${info}${groups}${ADDONS.length ? `<div data-addons>${addonsHtml(adds)}</div>` : ""}`,
+       <p class="product-desc">${esc(item.description)}</p>${info}${groups}${addonsFor(item).length ? `<div data-addons>${addonsHtml(adds, item)}</div>` : ""}`,
       `<div class="foot-row">
          <div class="qty"><button type="button" data-q="-1" aria-label="Decrease">−</button><span>1</span><button type="button" data-q="1" aria-label="Increase">+</button></div>
          <button class="btn" type="button" data-confirm>Add · <span data-total></span></button>
@@ -605,7 +606,7 @@
         const cur = adds[a.id] || { qty: 0, text: "" };
         cur.qty = Math.max(0, Math.min(a.maxQty || 1, cur.qty + +ad.dataset.ad));
         if (cur.qty) adds[a.id] = cur; else delete adds[a.id];
-        $("[data-addons]", o).innerHTML = addonsHtml(adds);
+        $("[data-addons]", o).innerHTML = addonsHtml(adds, item);
         const input = $(`[data-addon-text="${a.id}"]`, o);
         if (input && +ad.dataset.ad > 0) input.focus();
         update();
@@ -648,10 +649,19 @@
     if (weekly.until && date > weekly.until) return false;
     return (weekly[city] || []).includes(new Date(date + "T00:00").getDay());
   }
+  // item.specialDates: { "YYYY-MM-DD": { start, end } } lets an item be ordered on that date despite
+  // its prep days, in those hours only.
+  const itemWindows = (date) => state.cart.map((l) => findItem(l.id)).filter((i) => i && i.specialDates && i.specialDates[date]).map((i) => i.specialDates[date]);
+  function earliestFor(item) {
+    const d = new Date();
+    d.setDate(d.getDate() + (item.prepDays || 0));
+    return localDate(d);
+  }
   function minDate() {
     const d = new Date();
-    d.setDate(d.getDate() + Math.max(S.leadDays || 0, ...slowItems().map((i) => i.prepDays)));
-    for (let i = 0; i < 14 && (closedOn(localDate(d)) || unavailableItems(localDate(d)).length); i++) d.setDate(d.getDate() + 1);
+    d.setDate(d.getDate() + (S.leadDays || 0));
+    const ready = (date) => slowItems().every((i) => date >= earliestFor(i) || (i.specialDates && i.specialDates[date]));
+    for (let i = 0; i < 21 && (closedOn(localDate(d)) || unavailableItems(localDate(d)).length || !ready(localDate(d))); i++) d.setDate(d.getDate() + 1);
     return localDate(d);
   }
 
@@ -667,7 +677,9 @@
     const day = (S.specialDays && S.specialDays[date]) || S.slots;
     const out = [];
     for (let t = toMin(day.start); t + slotMinutes() <= toMin(day.end); t += slotMinutes()) out.push(toHHMM(t));
-    return out;
+    // An item ordered on one of its special dates narrows the slots to its hours.
+    const windows = itemWindows(date);
+    return out.filter((t) => windows.every((w) => toMin(t) >= toMin(w.start) && toMin(t) + slotMinutes() <= toMin(w.end)));
   }
   function slotLabel(hhmm) {
     if (!/^\d{2}:\d{2}$/.test(hhmm || "")) return hhmm || "";
@@ -696,11 +708,13 @@
   }
 
   /* Add-on picker. sel = { id: { qty, text } } for the product being added. */
-  function addonsHtml(sel) {
+  // Add-ons offered for an item (item.noAddons lists the ones it doesn't take).
+  const addonsFor = (item) => ADDONS.filter((a) => !(item.noAddons || []).includes(a.id));
+  function addonsHtml(sel, item) {
     return `
       <div class="addons">
         <h3>Make it extra special <small>with add-ons</small></h3>
-        ${ADDONS.map((a) => {
+        ${addonsFor(item).map((a) => {
           const qty = (sel[a.id] || {}).qty || 0;
           const text = (sel[a.id] || {}).text || "";
           const ctrl = (a.maxQty || 1) > 1
