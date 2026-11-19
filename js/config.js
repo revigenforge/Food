@@ -13,6 +13,7 @@ window.SITE = {
   subline: "Home of the OG Cookie Pie",
 
   instagram: "sweetlyyours.byzeen",
+  facebook: "https://www.facebook.com/profile.php?id=61596770668055", // leave empty to hide
   // WhatsApp number with country code, digits only (e.g. "919876543210").
   // Leave empty to send orders through Instagram DM instead.
   whatsapp: "917904767684",

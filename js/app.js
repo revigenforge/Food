@@ -8,6 +8,7 @@
   /* ---------- Icons (Lucide-style, stroke) ---------- */
   const PATHS = {
     instagram: '<rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".6" fill="currentColor"/>',
+    facebook: '<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>',
     pin: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
     bag: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>',
     truck: '<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>',
@@ -197,6 +198,7 @@
     if (!el) return;
     const contact = [
       `<a href="${igDm}" target="_blank" rel="noopener">${icon("instagram")} DM @${esc(S.instagram)}</a>`,
+      S.facebook ? `<a href="${esc(S.facebook)}" target="_blank" rel="noopener">${icon("facebook")} Facebook</a>` : "",
       S.whatsapp ? `<a href="https://wa.me/${S.whatsapp}" target="_blank" rel="noopener">${icon("whatsapp")} WhatsApp</a>` : "",
       S.phone ? `<a href="tel:${esc(S.phone.replace(/\s/g, ""))}">${icon("phone")} ${esc(S.phone)}</a>` : "",
       S.email ? `<a href="mailto:${esc(S.email)}">${icon("mail")} ${esc(S.email)}</a>` : ""
@@ -1831,6 +1833,7 @@
     if (page === "gallery") initGallery();
     if (page === "order") initOrder();
     $$("[data-ig]").forEach((a) => { a.href = igUrl; });
+    $$("[data-fb]").forEach((a) => { if (S.facebook) a.href = S.facebook; else a.hidden = true; });
     renderCartCount();
   });
 })();
